@@ -24,6 +24,8 @@ class AmebaProvider < Larimar::Provider
     @mutex = Mutex.new
 
     def source_finished(source : Ameba::Source) : Nil
+      diagnostics = [] of LSProtocol::Diagnostic
+
       source.issues.each do |issue|
         next if issue.disabled?
 
@@ -38,16 +40,18 @@ class AmebaProvider < Larimar::Provider
           character: (issue.end_location.try(&.column_number.to_u32) || issue.location.try(&.column_number.to_u32) || 1_u32),
         )
 
-        @mutex.synchronize do
-          diagnostics << LSProtocol::Diagnostic.new(
-            message: "[#{issue.rule.name}] #{issue.message}",
-            range: LSProtocol::Range.new(
-              start: start_location,
-              end: end_location,
-            ),
-            severity: convert_severity(issue.rule.severity),
-          )
-        end
+        diagnostics << LSProtocol::Diagnostic.new(
+          message: "[#{issue.rule.name}] #{issue.message}",
+          range: LSProtocol::Range.new(
+            start: start_location,
+            end: end_location,
+          ),
+          severity: convert_severity(issue.rule.severity),
+        )
+      end
+
+      @mutex.synchronize do
+        self.diagnostics.concat(diagnostics)
       end
     end
 
