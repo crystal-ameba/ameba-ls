@@ -80,14 +80,7 @@ class AmebaProvider < Larimar::Provider
   end
 
   def on_close(document : Larimar::TextDocument) : Nil
-    controller.server.send_msg(
-      LSProtocol::PublishDiagnosticsNotification.new(
-        params: LSProtocol::PublishDiagnosticsParams.new(
-          diagnostics: [] of LSProtocol::Diagnostic,
-          uri: document.uri,
-        ),
-      )
-    )
+    publish_diagnostics(document, [] of LSProtocol::Diagnostic)
   end
 
   private def handle_ameba(document : Larimar::TextDocument) : Nil
@@ -126,10 +119,14 @@ class AmebaProvider < Larimar::Provider
     @issues[document.uri] = source.issues
     @diagnostics[document.uri] = formatter.diagnostics
 
+    publish_diagnostics(document, formatter.diagnostics)
+  end
+
+  private def publish_diagnostics(document, diagnostics) : Nil
     controller.server.send_msg(
       LSProtocol::PublishDiagnosticsNotification.new(
         params: LSProtocol::PublishDiagnosticsParams.new(
-          diagnostics: formatter.diagnostics,
+          diagnostics: diagnostics,
           uri: document.uri,
         ),
       )
