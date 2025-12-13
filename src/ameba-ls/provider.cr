@@ -173,8 +173,6 @@ class AmebaProvider < Larimar::Provider
                   (issue_idx = data["idx"]?.try(&.as_i?)) &&
                   (issue = @issues[document_uri]?.try(&.[issue_idx]))
 
-    result = nil
-
     document.mutex.synchronize do
       corrector = Ameba::Source::Corrector.new(document.to_s)
       issue.correct(corrector)
@@ -186,7 +184,7 @@ class AmebaProvider < Larimar::Provider
         changes: {document.uri => text_edits},
       )
 
-      result = LSProtocol::CodeAction.new(
+      LSProtocol::CodeAction.new(
         title: "Fix #{issue.rule.name}",
         diagnostics: [diagnostic],
         edit: workspace_edit,
@@ -194,8 +192,6 @@ class AmebaProvider < Larimar::Provider
         is_preferred: true,
       )
     end
-
-    result
   end
 
   private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
