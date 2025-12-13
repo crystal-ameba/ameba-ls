@@ -43,9 +43,9 @@ class AmebaProvider < Larimar::Provider
             message: "[#{issue.rule.name}] #{issue.message}",
             range: LSProtocol::Range.new(
               start: start_location,
-              end: end_location
+              end: end_location,
             ),
-            severity: convert_severity(issue.rule.severity)
+            severity: convert_severity(issue.rule.severity),
           )
         end
       end
@@ -80,8 +80,8 @@ class AmebaProvider < Larimar::Provider
       LSProtocol::PublishDiagnosticsNotification.new(
         params: LSProtocol::PublishDiagnosticsParams.new(
           diagnostics: [] of LSProtocol::Diagnostic,
-          uri: document.uri
-        )
+          uri: document.uri,
+        ),
       )
     )
   end
@@ -122,8 +122,8 @@ class AmebaProvider < Larimar::Provider
       LSProtocol::PublishDiagnosticsNotification.new(
         params: LSProtocol::PublishDiagnosticsParams.new(
           diagnostics: formatter.diagnostics,
-          uri: document.uri
-        )
+          uri: document.uri,
+        ),
       )
     )
   end
@@ -154,7 +154,7 @@ class AmebaProvider < Larimar::Provider
         data: JSON::Any.new({
           "uri" => JSON::Any.new(document.uri.to_s),
           "idx" => JSON::Any.new(idx),
-        } of String => JSON::Any)
+        } of String => JSON::Any),
       )
     end
 
@@ -183,7 +183,7 @@ class AmebaProvider < Larimar::Provider
       get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
 
       workspace_edit = LSProtocol::WorkspaceEdit.new(
-        changes: {document.uri => text_edits}
+        changes: {document.uri => text_edits},
       )
 
       result = LSProtocol::CodeAction.new(
@@ -207,8 +207,8 @@ class AmebaProvider < Larimar::Provider
         new_text: insert_before,
         range: LSProtocol::Range.new(
           start: begin_pos,
-          end: begin_pos
-        )
+          end: begin_pos,
+        ),
       )
     end
 
@@ -217,8 +217,8 @@ class AmebaProvider < Larimar::Provider
         new_text: insert_after,
         range: LSProtocol::Range.new(
           start: end_pos,
-          end: end_pos
-        )
+          end: end_pos,
+        ),
       )
     end
 
@@ -227,8 +227,8 @@ class AmebaProvider < Larimar::Provider
         new_text: replacement,
         range: LSProtocol::Range.new(
           start: document.index_to_position(action.begin_pos),
-          end: document.index_to_position(action.end_pos)
-        )
+          end: document.index_to_position(action.end_pos),
+        ),
       )
     else
       action.@children.each do |child|
