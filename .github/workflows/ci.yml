@@ -19,16 +19,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Crystal
         uses: crystal-lang/install-crystal@v1
         with:
-          crystal: 1.15.1
+          crystal: 1.18.2
 
       - name: Cache Ameba binary
         id: cache-ameba
-        uses: actions/cache@v4.2.2
+        uses: actions/cache@v5
         with:
           path: bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }}
           key: ${{ runner.os }}-ameba-${{ matrix.ameba-version }}
@@ -45,4 +45,4 @@ jobs:
           ${{ runner.os == 'Windows' && 'Remove-Item -Path "ameba" -Recurse -Force' || 'rm -rf ameba' }}
 
       - name: Run Ameba Linter
-        run: bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }} -c .ameba.yml ${{ runner.os == 'Windows' && '--except Layout/TrailingWhitespace,Lint/Formatting' || '' }}
+        run: bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }}
