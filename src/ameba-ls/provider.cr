@@ -14,13 +14,14 @@ class AmebaProvider < Larimar::Provider
 
   include Larimar::CodeActionProvider
 
-  @diagnostics : Hash(URI, Array(LSProtocol::Diagnostic)) = Hash(URI, Array(LSProtocol::Diagnostic)).new
-  @issues : Hash(URI, Array(Ameba::Issue)) = Hash(URI, Array(Ameba::Issue)).new
+  @diagnostics = Hash(URI, Array(LSProtocol::Diagnostic)).new
+  @issues = Hash(URI, Array(Ameba::Issue)).new
 
   class DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
-    getter diagnostics : Array(LSProtocol::Diagnostic) = Array(LSProtocol::Diagnostic).new
-    @mutex : Mutex = Mutex.new
     property cancellation_token : CancellationToken?
+    getter diagnostics = Array(LSProtocol::Diagnostic).new
+
+    @mutex = Mutex.new
 
     def source_finished(source : Ameba::Source) : Nil
       source.issues.each do |issue|
