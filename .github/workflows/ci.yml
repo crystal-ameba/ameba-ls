@@ -1,4 +1,4 @@
-name: Ameba
+name: Ameba LS
 
 on:
   push:
@@ -12,37 +12,27 @@ on:
 jobs:
   lint:
     runs-on: ${{ matrix.os }}
+
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        ameba-version: [v1.6.4]
+        crystal: [latest, nightly]
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
       - name: Set up Crystal
         uses: crystal-lang/install-crystal@v1
         with:
-          crystal: 1.18.2
+          crystal: ${{ matrix.crystal }}
 
-      - name: Cache Ameba binary
-        id: cache-ameba
-        uses: actions/cache@v5
-        with:
-          path: bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }}
-          key: ${{ runner.os }}-ameba-${{ matrix.ameba-version }}
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - name: Build Ameba
-        if: steps.cache-ameba.outputs.cache-hit != 'true'
-        run: |
-          git clone --branch ${{ matrix.ameba-version }} --single-branch https://github.com/crystal-ameba/ameba.git
-          cd ameba
-          make bin/ameba CRFLAGS='-Dpreview_mt --no-debug'
-          mkdir -p ../bin
-          mv bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }} ../bin/
-          cd ..
-          ${{ runner.os == 'Windows' && 'Remove-Item -Path "ameba" -Recurse -Force' || 'rm -rf ameba' }}
+      - name: Install dependencies
+        run: shards install
+
+      - name: Build Ameba LS binary
+        run: shards build ameba-ls
 
       - name: Run Ameba Linter
-        run: bin/ameba${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: bin/ameba
