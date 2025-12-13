@@ -1,15 +1,6 @@
 # TODO: remove this monkey-patch
 class Ameba::Config
-  property sources : Array(Source)?
-
-  def sources
-    @sources ||= if (file = stdin_filename)
-                   [Source.new(STDIN.gets_to_end, file)]
-                 else
-                   (find_files_by_globs(globs) - find_files_by_globs(excluded))
-                     .map { |path| Source.new File.read(path), path }
-                 end
-  end
+  property sources : Array(Source) { previous_def }
 end
 
 class AmebaProvider < Larimar::Provider
