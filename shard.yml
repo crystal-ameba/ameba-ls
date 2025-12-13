@@ -17,5 +17,4 @@ dependencies:
     github: nobodywasishere/larimar
   ameba:
     github: crystal-ameba/ameba
-    # tag: v1.6.4
-    commit: 29d00ad3b36ae916f8bdf0065e3edaf5275dabb8 # 1.7.0-dev
+    commit: 0662b1880ae8fd3ada08b3611e16f3c1f6d004f7 # 1.7.0-dev
