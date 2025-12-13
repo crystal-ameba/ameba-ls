@@ -135,13 +135,14 @@ class AmebaProvider < Larimar::Provider
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
-    result = [] of LSProtocol::CodeAction | LSProtocol::Command
     diagnostics = @diagnostics[document.uri]?
     issues = @issues[document.uri]?
 
     if diagnostics.nil? || issues.nil?
       return
     end
+
+    result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     diagnostics.each_with_index do |diagnostic, idx|
       break unless (issue = issues[idx]?)
