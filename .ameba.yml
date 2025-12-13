@@ -2,5 +2,5 @@ Documentation/DocumentationAdmonition:
   Enabled: false
 
 Style/ParenthesesAroundCondition:
-  AllowSafeAssignment: true
   Enabled: true
+  AllowSafeAssignment: true

@@ -4,6 +4,8 @@ class Ameba::Config
 end
 
 class AmebaProvider < Larimar::Provider
+  include Larimar::CodeActionProvider
+
   Log = ::Larimar::Log.for(self)
 
   RULES_DISABLED = %w[
@@ -11,8 +13,6 @@ class AmebaProvider < Larimar::Provider
     Layout/TrailingWhitespace
     Lint/Formatting
   ]
-
-  include Larimar::CodeActionProvider
 
   @diagnostics = Hash(URI, Array(LSProtocol::Diagnostic)).new
   @issues = Hash(URI, Array(Ameba::Issue)).new
@@ -33,7 +33,6 @@ class AmebaProvider < Larimar::Provider
           line: (issue.location.try(&.line_number.to_u32) || 1_u32) - 1,
           character: (issue.location.try(&.column_number.to_u32) || 1_u32) - 1,
         )
-
         end_location = LSProtocol::Position.new(
           line: (issue.end_location.try(&.line_number.to_u32) || issue.location.try(&.line_number.to_u32) || 1_u32) - 1,
           character: (issue.end_location.try(&.column_number.to_u32) || issue.location.try(&.column_number.to_u32) || 1_u32),
@@ -91,18 +90,22 @@ class AmebaProvider < Larimar::Provider
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
 
-    config_path : String? = nil
+    workspace_folder = Larimar::Workspace
+      .find_closest_shard_yml(document.uri)
+      .try(&.path)
 
-    workspace_folder : String? = Larimar::Workspace.find_closest_shard_yml(document.uri).try(&.path)
     if workspace_folder
-      test_path : Path? = Path.new(workspace_folder, ".ameba.yml")
+      test_path = Path[workspace_folder, Ameba::Config::Loader::FILENAME]
 
       if File.exists?(test_path)
         config_path = test_path.to_s
       end
     end
 
-    Log.debug(&.emit("Running ameba", source: document.uri.path, config: config_path))
+    Log.debug(&.emit("Running ameba",
+      source: source.path,
+      config: config_path,
+    ))
 
     config = Ameba::Config.load(path: config_path)
     config.sources = [source]
@@ -135,12 +138,8 @@ class AmebaProvider < Larimar::Provider
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
-    diagnostics = @diagnostics[document.uri]?
-    issues = @issues[document.uri]?
-
-    if diagnostics.nil? || issues.nil?
-      return
-    end
+    return unless (diagnostics = @diagnostics[document.uri]?)
+    return unless (issues = @issues[document.uri]?)
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
