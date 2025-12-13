@@ -6,6 +6,12 @@ end
 class AmebaProvider < Larimar::Provider
   Log = ::Larimar::Log.for(self)
 
+  RULES_DISABLED = %w[
+    Layout/TrailingBlankLines
+    Layout/TrailingWhitespace
+    Lint/Formatting
+  ]
+
   include Larimar::CodeActionProvider
 
   @diagnostics : Hash(URI, Array(LSProtocol::Diagnostic)) = Hash(URI, Array(LSProtocol::Diagnostic)).new
@@ -102,7 +108,7 @@ class AmebaProvider < Larimar::Provider
     config.formatter = formatter
 
     # Disabling these as they're common when typing
-    config.update_rules(%w[Lint/Formatting Layout/TrailingBlankLines Layout/TrailingWhitespace], enabled: false)
+    config.update_rules(RULES_DISABLED, enabled: false)
 
     begin
       Ameba::Runner.new(config).run
