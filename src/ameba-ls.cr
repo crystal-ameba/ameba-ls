@@ -1,11 +1,12 @@
+require "log"
+require "option_parser"
 require "ameba"
 require "larimar/api/provider_server"
-require "option_parser"
 
-require "./ameba-ls/provider"
+require "./ameba-ls/*"
 
 OptionParser.parse do |parser|
-  parser.banner = "language server for ameba, a linter for crystal lang"
+  parser.banner = "Language server for Ameba, a linter for Crystal Programming Language"
 
   parser.on "-v", "--version", "Show version" do
     puts {{ `shards version "#{__DIR__}"`.chomp.stringify }}
@@ -26,8 +27,10 @@ end
 
 server = Larimar::Server.new(STDIN, STDOUT)
 
-backend = Larimar::LogBackend.new(server, formatter: Larimar::LogFormatter)
-::Log.setup_from_env(backend: backend)
+backend = Larimar::LogBackend.new(server,
+  formatter: Larimar::LogFormatter,
+)
+Log.setup_from_env(backend: backend)
 
 controller = Larimar::ProviderController.new
 controller.register_provider(AmebaProvider.new)
