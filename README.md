@@ -19,9 +19,9 @@ The latest release can be downloaded from GitHub or built from source.
 ### Build from source
 
 ```sh
-$ git clone https://github.com/crystal-lang-tools/ameba-ls
+$ git clone https://github.com/crystal-ameba/ameba-ls
 $ cd ameba-ls
-$ make ameba-ls
+$ make
 $ cp ./bin/ameba-ls ~/.local/bin # or somewhere else in PATH
 ```
 
@@ -29,7 +29,7 @@ $ cp ./bin/ameba-ls ~/.local/bin # or somewhere else in PATH
 
 ### Zed
 
-The latest version of the [Zed](https://zed.dev) Crystal extension has support for `ameba-ls` if it's installed in `PATH`.
+The latest version of the [Zed](https://zed.dev) [Crystal extension](https://zed.dev/extensions/crystal) has support for `ameba-ls` if it's installed in `PATH`.
 
 ### Sublime
 
@@ -37,21 +37,21 @@ Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and configu
 
 ```json
 {
-	"clients": {
-		"ameba-ls": {
-			"command": [
-				"ameba-ls"
-			],
-			"selector": "source.crystal",
-			"enabled": true,
-		},
-	},
+  "clients": {
+    "ameba-ls": {
+      "command": [
+        "ameba-ls"
+      ],
+      "selector": "source.crystal",
+      "enabled": true,
+    },
+  },
 }
 ```
 
 ## Contributing
 
-1. Fork it (<https://github.com/nobodywasishere/ameba-ls/fork>)
+1. Fork it (<https://github.com/crystal-ameba/ameba-ls/fork>)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
