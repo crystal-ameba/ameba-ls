@@ -6,7 +6,7 @@ require "larimar/api/provider_server"
 require "./ameba-ls/*"
 
 OptionParser.parse do |parser|
-  parser.banner = "Language server for the Ameba, a linter for Crystal Programming Language"
+  parser.banner = "Language server for Ameba, a linter for Crystal Programming Language"
 
   parser.on "-v", "--version", "Show version" do
     puts {{ `shards version "#{__DIR__}"`.chomp.stringify }}
