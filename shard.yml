@@ -8,7 +8,7 @@ targets:
   ameba-ls:
     main: src/ameba-ls.cr
 
-crystal: ">= 1.15.1"
+crystal: ">= 1.17.0"
 
 license: MIT
 
