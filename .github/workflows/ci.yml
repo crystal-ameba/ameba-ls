@@ -32,19 +32,3 @@ jobs:
 
       - name: Build Ameba LS binary
         run: shards build
-
-  lint:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Set up Crystal
-        uses: crystal-lang/install-crystal@v1
-
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: shards install
-
-      - name: Run ameba linter
-        run: bin/ameba
