@@ -2,12 +2,8 @@ name: Ameba LS
 
 on:
   push:
-    paths:
-      - "**/*.cr"
   pull_request:
     branches: [main]
-    paths:
-      - "**/*.cr"
 
 permissions:
   contents: read
