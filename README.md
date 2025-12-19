@@ -10,12 +10,12 @@ Does not require `ameba` be installed.
 
 ## Installation
 
-Each release corresponds to Ameba and Crystal lang releases.
+Each release corresponds to an Ameba release.
 
-| Ameba LS | Ameba | Crystal |
-|----------|-------|---------|
-| 0.2.0    | 1.7.0 |  1.18.2 |
-| 0.1.0    | 1.6.4 |  1.15.1 |
+| Ameba LS | Ameba |
+|----------|-------|
+| 0.2.0    | 1.7.0 |
+| 0.1.0    | 1.6.4 |
 
 The latest release can be downloaded from GitHub or built from source.
 
