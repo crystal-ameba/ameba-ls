@@ -1,6 +1,3 @@
-Documentation/DocumentationAdmonition:
-  Enabled: false
-
 Style/ParenthesesAroundCondition:
   Enabled: true
   AllowSafeAssignment: true
