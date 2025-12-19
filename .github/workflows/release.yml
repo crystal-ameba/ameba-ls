@@ -7,6 +7,9 @@ on:
     paths:
       - CHANGELOG.md
 
+permissions:
+  contents: read
+
 # We must only run one release workflow at a time to prevent corrupting
 # our release artifacts.
 concurrency:
