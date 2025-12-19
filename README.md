@@ -1,8 +1,10 @@
-# ameba-ls
+# Ameba LS
 
-Language server for the [Ameba](https://github.com/crystal-ameba/ameba) linter for Crystal lang.
+Language server for the [Ameba](https://github.com/crystal-ameba/ameba) linter
+for Crystal lang.
 
-Supports reporting issues while typing, and correcting issues via code actions. Does not require `ameba` be installed.
+Supports reporting issues while typing, and correcting issues via code actions.
+Does not require `ameba` be installed.
 
 ![](/assets/output.gif)
 
@@ -10,9 +12,10 @@ Supports reporting issues while typing, and correcting issues via code actions. 
 
 Each release corresponds to Ameba and Crystal lang releases.
 
-| `ameba-ls` | Ameba | Crystal Lang |
-|------------|-------|--------------|
-|      0.1.0 | 1.6.4 |       1.15.1 |
+| Ameba LS | Ameba | Crystal |
+|----------|-------|---------|
+| 0.2.0    | 1.7.0 |  1.18.2 |
+| 0.1.0    | 1.6.4 |  1.15.1 |
 
 The latest release can be downloaded from GitHub or built from source.
 
@@ -29,11 +32,13 @@ $ cp ./bin/ameba-ls ~/.local/bin # or somewhere else in PATH
 
 ### Zed
 
-The latest version of the [Zed](https://zed.dev) [Crystal extension](https://zed.dev/extensions/crystal) has support for `ameba-ls` if it's installed in `PATH`.
+The latest version of the [Zed](https://zed.dev) [Crystal extension](https://zed.dev/extensions/crystal)
+has support for `ameba-ls` if it's installed in `PATH`.
 
 ### Sublime
 
-Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and configure it to use `ameba-ls`:
+Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and
+configure it to use `ameba-ls`:
 
 ```json
 {
@@ -60,3 +65,4 @@ Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and configu
 ## Contributors
 
 - [Margret Riegert](https://github.com/nobodywasishere) - creator and maintainer
+- [Sijawusz Pur Rahnama](https://github.com/Sija) - contributor, maintainer
