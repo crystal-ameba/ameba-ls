@@ -96,14 +96,14 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download tarballs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: ./release
           merge-multiple: true
 
       - name: Download SHA info files
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: sha-info-*
           path: ./sha-info
