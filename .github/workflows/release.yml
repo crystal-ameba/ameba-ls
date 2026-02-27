@@ -67,7 +67,7 @@ jobs:
           tar -czf ameba-ls-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}.tar.gz -C build/${{ matrix.platform }} ameba-ls
 
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.platform }}
           path: |
@@ -78,7 +78,7 @@ jobs:
           sha256sum ameba-ls-${{ env.RELEASE_VERSION }}-${{ matrix.platform }}.tar.gz > sha-info-${{ matrix.platform }}.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sha-info-${{ matrix.platform }}
           path: sha-info-${{ matrix.platform }}.txt
