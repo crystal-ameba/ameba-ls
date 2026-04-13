@@ -14,18 +14,18 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Batch changes
-        uses: miniscruff/changie-action@v2
+        uses: miniscruff/changie-action@v3
         with:
           args: batch auto
 
       - name: Merge changes
-        uses: miniscruff/changie-action@v2
+        uses: miniscruff/changie-action@v3
         with:
           args: merge
 
       - name: Get the latest version
         id: latest
-        uses: miniscruff/changie-action@v2
+        uses: miniscruff/changie-action@v3
         with:
           args: latest
 
