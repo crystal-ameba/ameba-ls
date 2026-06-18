@@ -23,7 +23,7 @@ jobs:
       tag: ${{ steps.latest_version.outputs.tag }}
       version: ${{ steps.latest_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Get latest version info
         id: changie_latest
         uses: miniscruff/changie-action@v3
@@ -51,7 +51,7 @@ jobs:
       RELEASE_TAG: ${{ needs.setup.outputs.tag }}
       RELEASE_VERSION: ${{ needs.setup.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker://ghcr.io/luislavena/hydrofoil-crystal:1.15
         with:
           args: sh -c "shards check || shards install --skip-postinstall --skip-executables"
@@ -93,7 +93,7 @@ jobs:
       RELEASE_VERSION: ${{ needs.setup.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download tarballs
         uses: actions/download-artifact@v8
