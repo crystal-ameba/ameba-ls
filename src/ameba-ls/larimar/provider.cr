@@ -49,7 +49,7 @@ class AmebaLS::Provider < Larimar::Provider
       config: config_path,
     ))
 
-    config = Ameba::Config.load(path: config_path)
+    config = Config.load(path: config_path)
     config.sources = [source]
     config.formatter = formatter
 
