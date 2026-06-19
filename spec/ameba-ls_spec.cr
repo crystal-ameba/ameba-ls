@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-describe AmebaProvider do
+describe AmebaLS do
   # TODO: Write tests
 
   it "works" do

@@ -6,7 +6,7 @@ authors:
 
 targets:
   ameba-ls:
-    main: src/ameba-ls.cr
+    main: src/cli.cr
 
 crystal: ">= 1.19.0"
 
