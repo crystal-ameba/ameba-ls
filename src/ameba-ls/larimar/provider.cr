@@ -37,11 +37,8 @@ class AmebaLS::Provider < Larimar::Provider
       .try(&.path)
 
     if workspace_folder
-      test_path = Path[workspace_folder, Ameba::Config::Loader::FILENAME]
-
-      if File.exists?(test_path)
-        config_path = test_path.to_s
-      end
+      config_path = Path[workspace_folder, Ameba::Config::Loader::FILENAME].to_s
+      config_path = nil unless File.exists?(config_path)
     end
 
     Log.debug(&.emit("Running ameba",
