@@ -140,7 +140,7 @@ class AmebaLS::Provider < Larimar::Provider
 
   private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
     begin_pos = document.index_to_position(action.begin_pos)
-    end_pos = document.index_to_position(action.begin_pos)
+    end_pos = document.index_to_position(action.end_pos)
 
     if (insert_before = action.insert_before) && !insert_before.empty?
       edits << LSProtocol::TextEdit.new(
@@ -166,8 +166,8 @@ class AmebaLS::Provider < Larimar::Provider
       edits << LSProtocol::TextEdit.new(
         new_text: replacement,
         range: LSProtocol::Range.new(
-          start: document.index_to_position(action.begin_pos),
-          end: document.index_to_position(action.end_pos),
+          start: begin_pos,
+          end: end_pos,
         ),
       )
     else
