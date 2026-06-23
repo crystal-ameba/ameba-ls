@@ -22,7 +22,11 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
       )
 
       diagnostics << LSProtocol::Diagnostic.new(
-        message: "[#{issue.rule.name}] #{issue.message}",
+        code: issue.rule.name,
+        code_description: LSProtocol::CodeDescription.new(
+          href: URI.parse(issue.rule.class.documentation_url),
+        ),
+        message: issue.message,
         range: LSProtocol::Range.new(
           start: start_location,
           end: end_location,
