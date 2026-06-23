@@ -19,6 +19,13 @@ Each release corresponds to an Ameba release.
 
 The latest release can be downloaded from GitHub or built from source.
 
+### Homebrew
+
+```sh
+$ brew tap crystal-ameba/ameba
+$ brew install ameba-ls
+```
+
 ### Build from source
 
 ```sh
