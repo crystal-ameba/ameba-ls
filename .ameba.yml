@@ -1,3 +1,9 @@
 Style/ParenthesesAroundCondition:
   Enabled: true
   AllowSafeAssignment: true
+
+Style/CallParentheses:
+  Enabled: true
+
+Style/Elsif:
+  Enabled: true

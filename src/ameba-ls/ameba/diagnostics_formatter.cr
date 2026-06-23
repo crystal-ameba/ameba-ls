@@ -10,7 +10,7 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
     source.issues.each do |issue|
       next if issue.disabled?
 
-      cancellation_token.try &.cancelled!
+      cancellation_token.try(&.cancelled!)
 
       start_location = LSProtocol::Position.new(
         line: (issue.location.try(&.line_number.to_u32) || 1_u32) - 1,
