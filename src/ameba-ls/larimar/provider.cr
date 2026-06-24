@@ -84,11 +84,20 @@ class AmebaLS::Provider < Larimar::Provider
     return unless (diagnostics = @diagnostics[document.uri]?)
     return unless (issues = @issues[document.uri]?)
 
+    if range.is_a?(LSProtocol::SelectionRange)
+      range = range.range
+    end
+
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     diagnostics.each_with_index do |diagnostic, idx|
       break unless (issue = issues[idx]?)
       next unless issue.correctable?
+
+      if (location = issue.location) && (end_location = issue.end_location)
+        next unless range.start.line >= (location.line_number - 1) &&
+                    range.start.line <= (end_location.line_number - 1)
+      end
 
       result << LSProtocol::CodeAction.new(
         title: "Fix #{issue.rule.name}",
