@@ -2,7 +2,7 @@ version: 2.0
 shards:
   ameba:
     git: https://github.com/crystal-ameba/ameba.git
-    version: 1.7.0-dev+git.commit.7c62b0c9720f2c8ed3ea5acee2a4db9ff94562e2
+    version: 1.7.0-dev+git.commit.d4533b13b6470d08b49982defdcc3ac8231a028c
 
   larimar:
     git: https://github.com/nobodywasishere/larimar.git
