@@ -3,6 +3,7 @@ version: 0.2.0-dev
 
 authors:
   - Margret Riegert <margret@eowyn.net>
+  - Sijawusz Pur Rahnama <sija@sija.pl>
 
 targets:
   ameba-ls:
