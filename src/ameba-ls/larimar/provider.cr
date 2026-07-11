@@ -94,17 +94,29 @@ class AmebaLS::Provider < Larimar::Provider
       issue, diagnostic =
         diagnostic.issue, diagnostic.diagnostic
 
-      next unless issue.correctable?
       next unless diagnostic.range.overlaps?(range)
 
+      if issue.correctable?
+        result << LSProtocol::CodeAction.new(
+          title: "Fix #{issue.rule.name}",
+          diagnostics: [diagnostic],
+          kind: :quick_fix,
+          is_preferred: true,
+          data: JSON::Any.new({
+            "uri" => JSON::Any.new(document.uri.to_s),
+            "idx" => JSON::Any.new(idx),
+          } of String => JSON::Any),
+        )
+      end
+
       result << LSProtocol::CodeAction.new(
-        title: "Fix #{issue.rule.name}",
+        title: "Ignore #{issue.rule.name}",
         diagnostics: [diagnostic],
         kind: :quick_fix,
-        is_preferred: true,
         data: JSON::Any.new({
-          "uri" => JSON::Any.new(document.uri.to_s),
-          "idx" => JSON::Any.new(idx),
+          "uri"    => JSON::Any.new(document.uri.to_s),
+          "idx"    => JSON::Any.new(idx),
+          "ignore" => JSON::Any.new(true),
         } of String => JSON::Any),
       )
     end
@@ -126,8 +138,47 @@ class AmebaLS::Provider < Larimar::Provider
                   (issue = diagnostics[diagnostic_idx]?.try(&.issue))
 
     document.mutex.synchronize do
-      build_fix_code_action(document, diagnostic, issue)
+      if data["ignore"]?.try(&.as_bool?)
+        build_ignore_code_action(document, diagnostic, issue)
+      else
+        build_fix_code_action(document, diagnostic, issue)
+      end
     end
+  end
+
+  private def build_ignore_code_action(document, diagnostic, issue)
+    return unless (location = issue.location)
+    line_number = location.line_number - 1
+
+    position = LSProtocol::Position.new(
+      line: line_number.to_u,
+      character: 0_u32,
+    )
+    indent = document
+      .to_s
+      .lines[line_number]
+      .match!(/^\s*/)[0]
+
+    text_edits = [
+      LSProtocol::TextEdit.new(
+        new_text: "#{indent}# ameba:disable #{issue.rule.name}\n",
+        range: LSProtocol::Range.new(
+          start: position,
+          end: position,
+        ),
+      ),
+    ]
+
+    workspace_edit = LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => text_edits},
+    )
+
+    LSProtocol::CodeAction.new(
+      title: "Ignore #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      edit: workspace_edit,
+      kind: :quick_fix,
+    )
   end
 
   private def build_fix_code_action(document, diagnostic, issue)
