@@ -126,24 +126,28 @@ class AmebaLS::Provider < Larimar::Provider
                   (issue = diagnostics[diagnostic_idx]?.try(&.issue))
 
     document.mutex.synchronize do
-      corrector = Ameba::Source::Corrector.new(document.to_s)
-      issue.correct(corrector)
-
-      text_edits = [] of LSProtocol::TextEdit
-      get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
-
-      workspace_edit = LSProtocol::WorkspaceEdit.new(
-        changes: {document.uri => text_edits},
-      )
-
-      LSProtocol::CodeAction.new(
-        title: "Fix #{issue.rule.name}",
-        diagnostics: [diagnostic],
-        edit: workspace_edit,
-        kind: :quick_fix,
-        is_preferred: true,
-      )
+      build_fix_code_action(document, diagnostic, issue)
     end
+  end
+
+  private def build_fix_code_action(document, diagnostic, issue)
+    corrector = Ameba::Source::Corrector.new(document.to_s)
+    issue.correct(corrector)
+
+    text_edits = [] of LSProtocol::TextEdit
+    get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
+
+    workspace_edit = LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => text_edits},
+    )
+
+    LSProtocol::CodeAction.new(
+      title: "Fix #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      edit: workspace_edit,
+      kind: :quick_fix,
+      is_preferred: true,
+    )
   end
 
   private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
