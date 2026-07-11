@@ -75,6 +75,17 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
+  private def overlaps?(issue_range, range : LSProtocol::Range)
+    r1 = issue_range.start..issue_range.end
+    r2 = range.start..range.end
+
+    r1.overlaps?(r2)
+  end
+
+  private def overlaps?(issue_range, range : LSProtocol::SelectionRange)
+    overlaps?(issue_range, range.range)
+  end
+
   def provide_code_actions(
     document : Larimar::TextDocument,
     range : LSProtocol::Range | LSProtocol::SelectionRange,
@@ -84,19 +95,14 @@ class AmebaLS::Provider < Larimar::Provider
     return unless (diagnostics = @diagnostics[document.uri]?)
     return unless (issues = @issues[document.uri]?)
 
-    if range.is_a?(LSProtocol::SelectionRange)
-      range = range.range
-    end
-
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     diagnostics.each_with_index do |diagnostic, idx|
       break unless (issue = issues[idx]?)
       next unless issue.correctable?
 
-      if (location = issue.location) && (end_location = issue.end_location)
-        next unless range.start.line >= (location.line_number - 1) &&
-                    range.start.line <= (end_location.line_number - 1)
+      if (issue_location_range = issue.location_range)
+        next unless overlaps?(issue_location_range, range)
       end
 
       result << LSProtocol::CodeAction.new(
