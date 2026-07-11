@@ -9,3 +9,11 @@ class LSProtocol::InitializeResult
     previous_def
   end
 end
+
+class LSProtocol::Position
+  include Comparable(self)
+
+  def <=>(other : self)
+    {line, character} <=> {other.line, other.character}
+  end
+end

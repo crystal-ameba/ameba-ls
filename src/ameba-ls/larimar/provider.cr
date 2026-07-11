@@ -75,22 +75,15 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
-  private def intersects?(location, end_location, position)
-    return false unless position.line >= (location.line_number - 1) &&
-                        position.line <= (end_location.line_number - 1)
+  private def overlaps?(issue_range, range : LSProtocol::Range)
+    r1 = issue_range.start..issue_range.end
+    r2 = range.start..range.end
 
-    if location.same_line?(end_location)
-      position.character >= (location.column_number - 1) &&
-        position.character <= end_location.column_number
-    else
-      if position.line == (location.line_number - 1)
-        return false unless position.character >= (location.column_number - 1)
-      end
-      if position.line == (end_location.line_number - 1)
-        return false unless position.character <= end_location.column_number
-      end
-      true
-    end
+    r1.overlaps?(r2)
+  end
+
+  private def overlaps?(issue_range, range : LSProtocol::SelectionRange)
+    overlaps?(issue_range, range.range)
   end
 
   def provide_code_actions(
@@ -102,19 +95,14 @@ class AmebaLS::Provider < Larimar::Provider
     return unless (diagnostics = @diagnostics[document.uri]?)
     return unless (issues = @issues[document.uri]?)
 
-    if range.is_a?(LSProtocol::SelectionRange)
-      range = range.range
-    end
-
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     diagnostics.each_with_index do |diagnostic, idx|
       break unless (issue = issues[idx]?)
       next unless issue.correctable?
 
-      if (location = issue.location) && (end_location = issue.end_location)
-        next unless intersects?(location, end_location, range.start) ||
-                    intersects?(location, end_location, range.end)
+      if (issue_location_range = issue.location_range)
+        next unless overlaps?(issue_location_range, range)
       end
 
       result << LSProtocol::CodeAction.new(
