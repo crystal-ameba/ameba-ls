@@ -75,6 +75,24 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
+  private def intersects?(location, end_location, position)
+    return false unless position.line >= (location.line_number - 1) &&
+                        position.line <= (end_location.line_number - 1)
+
+    if location.same_line?(end_location)
+      position.character >= (location.column_number - 1) &&
+        position.character <= end_location.column_number
+    else
+      if position.line == (location.line_number - 1)
+        return false unless position.character >= (location.column_number - 1)
+      end
+      if position.line == (end_location.line_number - 1)
+        return false unless position.character <= end_location.column_number
+      end
+      true
+    end
+  end
+
   def provide_code_actions(
     document : Larimar::TextDocument,
     range : LSProtocol::Range | LSProtocol::SelectionRange,
@@ -95,8 +113,8 @@ class AmebaLS::Provider < Larimar::Provider
       next unless issue.correctable?
 
       if (location = issue.location) && (end_location = issue.end_location)
-        next unless range.start.line >= (location.line_number - 1) &&
-                    range.start.line <= (end_location.line_number - 1)
+        next unless intersects?(location, end_location, range.start) ||
+                    intersects?(location, end_location, range.end)
       end
 
       result << LSProtocol::CodeAction.new(
