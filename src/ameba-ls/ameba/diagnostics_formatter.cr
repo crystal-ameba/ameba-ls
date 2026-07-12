@@ -12,25 +12,13 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
 
       cancellation_token.try(&.cancelled!)
 
-      start_location = LSProtocol::Position.new(
-        line: (issue.location.try(&.line_number.to_u32) || 1_u32) - 1,
-        character: (issue.location.try(&.column_number.to_u32) || 1_u32) - 1,
-      )
-      end_location = LSProtocol::Position.new(
-        line: (issue.end_location.try(&.line_number.to_u32) || issue.location.try(&.line_number.to_u32) || 1_u32) - 1,
-        character: (issue.end_location.try(&.column_number.to_u32) || issue.location.try(&.column_number.to_u32) || 1_u32),
-      )
-
       diagnostics << LSProtocol::Diagnostic.new(
         code: issue.rule.name,
         code_description: LSProtocol::CodeDescription.new(
           href: URI.parse(issue.rule.class.documentation_url),
         ),
         message: issue.message,
-        range: LSProtocol::Range.new(
-          start: start_location,
-          end: end_location,
-        ),
+        range: issue.lsp_location_range,
         severity: convert_severity(issue.rule.severity),
       )
     end

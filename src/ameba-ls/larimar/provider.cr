@@ -89,10 +89,7 @@ class AmebaLS::Provider < Larimar::Provider
     diagnostics.each_with_index do |diagnostic, idx|
       break unless (issue = issues[idx]?)
       next unless issue.correctable?
-
-      if (issue_location_range = issue.location_range)
-        next unless issue_location_range.overlaps?(range)
-      end
+      next unless diagnostic.range.overlaps?(range)
 
       result << LSProtocol::CodeAction.new(
         title: "Fix #{issue.rule.name}",
