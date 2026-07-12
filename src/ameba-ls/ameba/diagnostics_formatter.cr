@@ -1,25 +1,36 @@
+class AmebaLS::IssueDiagnostic
+  getter issue : Ameba::Issue
+  getter diagnostic : LSProtocol::Diagnostic
+
+  def initialize(@issue, @diagnostic)
+  end
+end
+
 class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
   property cancellation_token : CancellationToken?
-  getter diagnostics = Array(LSProtocol::Diagnostic).new
+  getter diagnostics = Array(IssueDiagnostic).new
 
   @mutex = Mutex.new
 
   def source_finished(source : Ameba::Source) : Nil
-    diagnostics = [] of LSProtocol::Diagnostic
+    diagnostics = [] of IssueDiagnostic
 
     source.issues.each do |issue|
       next if issue.disabled?
 
       cancellation_token.try(&.cancelled!)
 
-      diagnostics << LSProtocol::Diagnostic.new(
-        code: issue.rule.name,
-        code_description: LSProtocol::CodeDescription.new(
-          href: URI.parse(issue.rule.class.documentation_url),
-        ),
-        message: issue.message,
-        range: issue.lsp_location_range,
-        severity: convert_severity(issue.rule.severity),
+      diagnostics << IssueDiagnostic.new(
+        issue: issue,
+        diagnostic: LSProtocol::Diagnostic.new(
+          code: issue.rule.name,
+          code_description: LSProtocol::CodeDescription.new(
+            href: URI.parse(issue.rule.class.documentation_url),
+          ),
+          message: issue.message,
+          range: issue.lsp_location_range,
+          severity: convert_severity(issue.rule.severity),
+        )
       )
     end
 
