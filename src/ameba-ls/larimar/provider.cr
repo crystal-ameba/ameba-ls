@@ -58,7 +58,7 @@ class AmebaLS::Provider < Larimar::Provider
     rescue CancellationException
     end
 
-    @issues[document.uri] = source.issues
+    @issues[document.uri] = source.issues.reject(&.disabled?)
     @diagnostics[document.uri] = formatter.diagnostics
 
     publish_diagnostics(document, formatter.diagnostics)
