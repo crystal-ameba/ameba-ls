@@ -121,6 +121,9 @@ class AmebaLS::Provider < Larimar::Provider
       )
     end
 
+    result.sort_by! do |action|
+      action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
+    end
     result
   end
 
