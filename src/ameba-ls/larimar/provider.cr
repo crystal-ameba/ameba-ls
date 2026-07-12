@@ -122,7 +122,8 @@ class AmebaLS::Provider < Larimar::Provider
                   (document = controller.@documents[document_uri]?) &&
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (diagnostic_idx = data["idx"]?.try(&.as_i?)) &&
-                  (issue = @diagnostics[document_uri]?.try(&.[diagnostic_idx].issue))
+                  (diagnostics = @diagnostics[document_uri]?) &&
+                  (issue = diagnostics[diagnostic_idx]?.try(&.issue))
 
     document.mutex.synchronize do
       corrector = Ameba::Source::Corrector.new(document.to_s)
