@@ -9,8 +9,7 @@ class AmebaLS::Provider < Larimar::Provider
     Lint/Formatting
   ]
 
-  @diagnostics = Hash(URI, Array(LSProtocol::Diagnostic)).new
-  @issues = Hash(URI, Array(Ameba::Issue)).new
+  @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
 
   def on_open(document : Larimar::TextDocument) : Nil
     handle_ameba(document)
@@ -25,7 +24,6 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   def on_close(document : Larimar::TextDocument) : Nil
-    @issues.delete(document.uri)
     @diagnostics.delete(document.uri)
 
     publish_diagnostics(document, [] of LSProtocol::Diagnostic)
@@ -61,13 +59,13 @@ class AmebaLS::Provider < Larimar::Provider
     rescue CancellationException
     end
 
-    @issues[document.uri] = source.issues.reject(&.disabled?)
-    @diagnostics[document.uri] = formatter.diagnostics
+    @diagnostics[document.uri] =
+      diagnostics = formatter.diagnostics
 
-    publish_diagnostics(document, formatter.diagnostics)
+    publish_diagnostics(document, diagnostics)
   end
 
-  private def publish_diagnostics(document, diagnostics) : Nil
+  private def publish_diagnostics(document, diagnostics : Array(LSProtocol::Diagnostic)) : Nil
     controller.server.send_msg(
       LSProtocol::PublishDiagnosticsNotification.new(
         params: LSProtocol::PublishDiagnosticsParams.new(
@@ -78,6 +76,10 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
+  private def publish_diagnostics(document, diagnostics : Array(IssueDiagnostic)) : Nil
+    publish_diagnostics(document, diagnostics.map(&.diagnostic))
+  end
+
   def provide_code_actions(
     document : Larimar::TextDocument,
     range : LSProtocol::Range | LSProtocol::SelectionRange,
@@ -85,12 +87,13 @@ class AmebaLS::Provider < Larimar::Provider
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
     return unless (diagnostics = @diagnostics[document.uri]?)
-    return unless (issues = @issues[document.uri]?)
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     diagnostics.each_with_index do |diagnostic, idx|
-      break unless (issue = issues[idx]?)
+      issue, diagnostic =
+        diagnostic.issue, diagnostic.diagnostic
+
       next unless issue.correctable?
       next unless diagnostic.range.overlaps?(range)
 
@@ -118,8 +121,8 @@ class AmebaLS::Provider < Larimar::Provider
                   (document_uri = URI.parse(document_uri_string)) &&
                   (document = controller.@documents[document_uri]?) &&
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
-                  (issue_idx = data["idx"]?.try(&.as_i?)) &&
-                  (issue = @issues[document_uri]?.try(&.[issue_idx]))
+                  (diagnostic_idx = data["idx"]?.try(&.as_i?)) &&
+                  (issue = @diagnostics[document_uri]?.try(&.[diagnostic_idx].issue))
 
     document.mutex.synchronize do
       corrector = Ameba::Source::Corrector.new(document.to_s)
