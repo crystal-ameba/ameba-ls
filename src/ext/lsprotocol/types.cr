@@ -17,3 +17,14 @@ class LSProtocol::Position
     {line, character} <=> {other.line, other.character}
   end
 end
+
+class LSProtocol::Range
+  def overlaps?(other : self)
+    (start..self.end)
+      .overlaps?(other.start..other.end)
+  end
+
+  def overlaps?(other : LSProtocol::SelectionRange)
+    overlaps?(other.range)
+  end
+end
