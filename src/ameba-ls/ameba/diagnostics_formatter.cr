@@ -7,6 +7,12 @@ class AmebaLS::IssueDiagnostic
 end
 
 class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
+  private UNNECESSARY_TAG_KEYWORDS =
+    %w[unneeded unreachable unused useless redundant]
+
+  private UNNECESSARY_TAG_PATTERN =
+    %r{^(\w+)/(#{UNNECESSARY_TAG_KEYWORDS.join('|')})}i
+
   property cancellation_token : CancellationToken?
   getter diagnostics = Array(IssueDiagnostic).new
 
@@ -20,6 +26,10 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
 
       cancellation_token.try(&.cancelled!)
 
+      if issue.rule.name.matches?(UNNECESSARY_TAG_PATTERN)
+        tags = [:unnecessary] of LSProtocol::DiagnosticTag
+      end
+
       diagnostics << IssueDiagnostic.new(
         issue: issue,
         diagnostic: LSProtocol::Diagnostic.new(
@@ -30,6 +40,7 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
           message: issue.message,
           range: issue.lsp_location_range,
           severity: convert_severity(issue.rule.severity),
+          tags: tags,
         )
       )
     end
