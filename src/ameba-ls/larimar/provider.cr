@@ -150,24 +150,60 @@ class AmebaLS::Provider < Larimar::Provider
     return unless (location = issue.location)
     line_number = location.line_number - 1
 
-    position = LSProtocol::Position.new(
-      line: line_number.to_u,
-      character: 0_u32,
-    )
-    indent = document
-      .to_s
-      .lines[line_number]
-      .match!(/^\s*/)[0]
+    text_edits = [] of LSProtocol::TextEdit
+    lines = document.to_s.lines
 
-    text_edits = [
-      LSProtocol::TextEdit.new(
+    if line_number.positive?
+      prev_line = lines[line_number - 1]
+
+      if prev_line.lstrip.starts_with?("# ameba:disable")
+        position = LSProtocol::Position.new(
+          line: line_number.to_u - 1,
+          character: prev_line.size.to_u,
+        )
+        text_edits << LSProtocol::TextEdit.new(
+          new_text: ", #{issue.rule.name}",
+          range: LSProtocol::Range.new(
+            start: position,
+            end: position,
+          ),
+        )
+      end
+    end
+
+    if text_edits.empty?
+      curr_line = lines[line_number]
+
+      if curr_line.ends_with?(/# ameba:disable (.+?)/)
+        position = LSProtocol::Position.new(
+          line: line_number.to_u,
+          character: curr_line.size.to_u,
+        )
+        text_edits << LSProtocol::TextEdit.new(
+          new_text: ", #{issue.rule.name}",
+          range: LSProtocol::Range.new(
+            start: position,
+            end: position,
+          ),
+        )
+      end
+    end
+
+    if text_edits.empty?
+      indent = lines[line_number].match!(/^\s*/)[0]
+
+      position = LSProtocol::Position.new(
+        line: line_number.to_u,
+        character: 0_u32,
+      )
+      text_edits << LSProtocol::TextEdit.new(
         new_text: "#{indent}# ameba:disable #{issue.rule.name}\n",
         range: LSProtocol::Range.new(
           start: position,
           end: position,
         ),
-      ),
-    ]
+      )
+    end
 
     workspace_edit = LSProtocol::WorkspaceEdit.new(
       changes: {document.uri => text_edits},
