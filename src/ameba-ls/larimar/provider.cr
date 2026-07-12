@@ -25,6 +25,9 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   def on_close(document : Larimar::TextDocument) : Nil
+    @issues.delete(document.uri)
+    @diagnostics.delete(document.uri)
+
     publish_diagnostics(document, [] of LSProtocol::Diagnostic)
   end
 
