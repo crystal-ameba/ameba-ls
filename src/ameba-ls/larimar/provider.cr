@@ -161,8 +161,8 @@ class AmebaLS::Provider < Larimar::Provider
 
       if prev_line.lstrip.starts_with?("# ameba:disable")
         position = LSProtocol::Position.new(
-          line: line_number.to_u - 1,
-          character: prev_line.size.to_u,
+          line: line_number.to_u32 - 1,
+          character: prev_line.size.to_u32,
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -179,8 +179,8 @@ class AmebaLS::Provider < Larimar::Provider
 
       if curr_line.ends_with?(/# ameba:disable (.+?)/)
         position = LSProtocol::Position.new(
-          line: line_number.to_u,
-          character: curr_line.size.to_u,
+          line: line_number.to_u32,
+          character: curr_line.size.to_u32,
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -196,7 +196,7 @@ class AmebaLS::Provider < Larimar::Provider
       indent = lines[line_number].match!(/^\s*/)[0]
 
       position = LSProtocol::Position.new(
-        line: line_number.to_u,
+        line: line_number.to_u32,
         character: 0_u32,
       )
       text_edits << LSProtocol::TextEdit.new(
