@@ -142,14 +142,14 @@ class AmebaLS::Provider < Larimar::Provider
 
     document.mutex.synchronize do
       if data["ignore"]?.try(&.as_bool?)
-        build_ignore_code_action(document, diagnostic, issue)
+        resolve_ignore_code_action(document, diagnostic, issue)
       else
-        build_fix_code_action(document, diagnostic, issue)
+        resolve_fix_code_action(document, diagnostic, issue)
       end
     end
   end
 
-  private def build_ignore_code_action(document, diagnostic, issue)
+  private def resolve_ignore_code_action(document, diagnostic, issue)
     return unless (location = issue.location)
     line_number = location.line_number - 1
 
@@ -220,7 +220,7 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
-  private def build_fix_code_action(document, diagnostic, issue)
+  private def resolve_fix_code_action(document, diagnostic, issue)
     corrector = Ameba::Source::Corrector.new(document.to_s)
     issue.correct(corrector)
 
