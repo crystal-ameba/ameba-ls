@@ -94,21 +94,36 @@ class AmebaLS::Provider < Larimar::Provider
       issue, diagnostic =
         diagnostic.issue, diagnostic.diagnostic
 
-      next unless issue.correctable?
       next unless diagnostic.range.overlaps?(range)
 
+      if issue.correctable?
+        result << LSProtocol::CodeAction.new(
+          title: "Fix #{issue.rule.name}",
+          diagnostics: [diagnostic],
+          kind: :quick_fix,
+          is_preferred: true,
+          data: JSON::Any.new({
+            "uri" => JSON::Any.new(document.uri.to_s),
+            "idx" => JSON::Any.new(idx),
+          } of String => JSON::Any),
+        )
+      end
+
       result << LSProtocol::CodeAction.new(
-        title: "Fix #{issue.rule.name}",
+        title: "Ignore #{issue.rule.name}",
         diagnostics: [diagnostic],
         kind: :quick_fix,
-        is_preferred: true,
         data: JSON::Any.new({
-          "uri" => JSON::Any.new(document.uri.to_s),
-          "idx" => JSON::Any.new(idx),
+          "uri"    => JSON::Any.new(document.uri.to_s),
+          "idx"    => JSON::Any.new(idx),
+          "ignore" => JSON::Any.new(true),
         } of String => JSON::Any),
       )
     end
 
+    result.sort_by! do |action|
+      action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
+    end
     result
   end
 
@@ -126,24 +141,103 @@ class AmebaLS::Provider < Larimar::Provider
                   (issue = diagnostics[diagnostic_idx]?.try(&.issue))
 
     document.mutex.synchronize do
-      corrector = Ameba::Source::Corrector.new(document.to_s)
-      issue.correct(corrector)
+      if data["ignore"]?.try(&.as_bool?)
+        resolve_ignore_code_action(document, diagnostic, issue)
+      else
+        resolve_fix_code_action(document, diagnostic, issue)
+      end
+    end
+  end
 
-      text_edits = [] of LSProtocol::TextEdit
-      get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
+  private def resolve_ignore_code_action(document, diagnostic, issue)
+    return unless (location = issue.location)
+    line_number = location.line_number - 1
 
-      workspace_edit = LSProtocol::WorkspaceEdit.new(
-        changes: {document.uri => text_edits},
+    text_edits = [] of LSProtocol::TextEdit
+    lines = document.to_s.lines
+
+    if line_number.positive?
+      prev_line = lines[line_number - 1]
+
+      if prev_line.lstrip.starts_with?("# ameba:disable")
+        position = LSProtocol::Position.new(
+          line: line_number.to_u - 1,
+          character: prev_line.size.to_u,
+        )
+        text_edits << LSProtocol::TextEdit.new(
+          new_text: ", #{issue.rule.name}",
+          range: LSProtocol::Range.new(
+            start: position,
+            end: position,
+          ),
+        )
+      end
+    end
+
+    if text_edits.empty?
+      curr_line = lines[line_number]
+
+      if curr_line.ends_with?(/# ameba:disable (.+?)/)
+        position = LSProtocol::Position.new(
+          line: line_number.to_u,
+          character: curr_line.size.to_u,
+        )
+        text_edits << LSProtocol::TextEdit.new(
+          new_text: ", #{issue.rule.name}",
+          range: LSProtocol::Range.new(
+            start: position,
+            end: position,
+          ),
+        )
+      end
+    end
+
+    if text_edits.empty?
+      indent = lines[line_number].match!(/^\s*/)[0]
+
+      position = LSProtocol::Position.new(
+        line: line_number.to_u,
+        character: 0_u32,
       )
-
-      LSProtocol::CodeAction.new(
-        title: "Fix #{issue.rule.name}",
-        diagnostics: [diagnostic],
-        edit: workspace_edit,
-        kind: :quick_fix,
-        is_preferred: true,
+      text_edits << LSProtocol::TextEdit.new(
+        new_text: "#{indent}# ameba:disable #{issue.rule.name}\n",
+        range: LSProtocol::Range.new(
+          start: position,
+          end: position,
+        ),
       )
     end
+
+    workspace_edit = LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => text_edits},
+    )
+
+    LSProtocol::CodeAction.new(
+      title: "Ignore #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      edit: workspace_edit,
+      kind: :quick_fix,
+    )
+  end
+
+  private def resolve_fix_code_action(document, diagnostic, issue)
+    corrector = Ameba::Source::Corrector.new(document.to_s)
+    issue.correct(corrector)
+
+    text_edits = [] of LSProtocol::TextEdit
+    get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
+
+    workspace_edit = LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => text_edits},
+    )
+
+    LSProtocol::CodeAction.new(
+      title: "Fix #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      edit: workspace_edit,
+      kind: :quick_fix,
+      is_preferred: true,
+    )
   end
 
   private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
