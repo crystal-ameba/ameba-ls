@@ -1,3 +1,5 @@
+{% skip_file if Range.has_method?(:overlaps?) %}
+
 # https://github.com/crystal-lang/crystal/pull/17081
 struct Range(B, E)
   protected def empty_without_iterating? : Bool
