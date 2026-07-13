@@ -8,7 +8,7 @@ end
 
 class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
   private UNNECESSARY_TAG_KEYWORDS =
-    %w[unneeded unreachable unused useless redundant]
+    %w[duplicate unneeded unreachable unused useless redundant]
 
   private UNNECESSARY_TAG_PATTERN =
     %r{^(\w+)/(#{UNNECESSARY_TAG_KEYWORDS.join('|')})}i
