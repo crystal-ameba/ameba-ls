@@ -41,6 +41,7 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
           range: issue.lsp_location_range,
           severity: convert_severity(issue.rule.severity),
           tags: tags,
+          source: "ameba",
         )
       )
     end
