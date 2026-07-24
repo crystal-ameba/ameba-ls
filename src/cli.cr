@@ -1,6 +1,12 @@
 require "option_parser"
 require "./ameba-ls"
 
+{% if Fiber.has_constant?(:ExecutionContext) %}
+  Fiber::ExecutionContext
+    .default
+    .resize(Fiber::ExecutionContext.default_workers_count)
+{% end %}
+
 OptionParser.parse do |parser|
   parser.banner = "Language server for Ameba, a linter for Crystal Programming Language"
 
