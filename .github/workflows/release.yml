@@ -54,7 +54,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - run: docker run --rm -v $PWD:/mnt -w /mnt crystallang/crystal:latest-alpine shards build ameba-ls -Dpreview_mt --release --static
+      - run: docker run --rm -v $PWD:/mnt -w /mnt crystallang/crystal:latest-alpine shards build ameba-ls --release --static
       - run: tar zcf ameba-ls-${{ needs.setup.outputs.version }}-linux-musl-$(uname -m).tar.gz -C bin ameba-ls
       - run: gh release -R ${{ github.repository }} upload ${{ github.ref_name }} ameba-ls-${{ needs.setup.outputs.version }}-linux-musl-$(uname -m).tar.gz
 
@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: crystal-lang/install-crystal@v1
       - uses: actions/checkout@v7
-      - run: shards build ameba-ls -Dpreview_mt --release
+      - run: shards build ameba-ls --release
       - run: tar zcf ameba-ls-${{ needs.setup.outputs.version }}-darwin-${{ matrix.arch }}.tar.gz -C bin ameba-ls ameba-ls.dwarf
       - run: gh release -R ${{ github.repository }} upload ${{ github.ref_name }} ameba-ls-${{ needs.setup.outputs.version }}-darwin-${{ matrix.arch }}.tar.gz
 
@@ -84,6 +84,6 @@ jobs:
     steps:
       - uses: crystal-lang/install-crystal@v1
       - uses: actions/checkout@v7
-      - run: shards build ameba-ls -Dpreview_mt --release --static
+      - run: shards build ameba-ls --release --static
       - run: cd bin; 7z a -tzip ../ameba-ls-${{ needs.setup.outputs.version }}-windows-msvc-x86_64.zip ameba-ls.exe ameba-ls.pdb
       - run: gh release -R ${{ github.repository }} upload ${{ github.ref_name }} ameba-ls-${{ needs.setup.outputs.version }}-windows-msvc-x86_64.zip
