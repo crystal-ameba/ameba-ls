@@ -42,6 +42,25 @@ $ cp ./bin/ameba-ls ~/.local/bin # or somewhere else in PATH
 The latest version of the [Zed](https://zed.dev) [Crystal extension](https://zed.dev/extensions/crystal)
 has support for `ameba-ls` if it's installed in `PATH`.
 
+If you want to use the `ameba-ls` alone, use the following config:
+
+```json
+{
+  "languages": {
+    "Crystal": {
+      "language_servers": ["ameba-ls", "!crystalline"],
+      "formatter": {
+        "external": {
+          "command": "crystal",
+          "arguments": ["tool", "format", "-"],
+        },
+      },
+      "format_on_save": "on",
+    }
+  }
+}
+```
+
 ### Sublime
 
 Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and
