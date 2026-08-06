@@ -61,7 +61,7 @@ If you want to use the `ameba-ls` alone, use the following config:
 }
 ```
 
-### Sublime
+### Sublime Text
 
 Install the Sublime [LSP](https://github.com/sublimelsp/LSP) package and
 configure it to use `ameba-ls`:
