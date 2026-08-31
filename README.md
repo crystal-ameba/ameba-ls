@@ -48,7 +48,7 @@ If you want to use the `ameba-ls` alone, use the following config:
 {
   "languages": {
     "Crystal": {
-      "language_servers": ["ameba-ls", "!crystalline"],
+      "language_servers": ["ameba-ls"],
       "formatter": {
         "external": {
           "command": "crystal",
