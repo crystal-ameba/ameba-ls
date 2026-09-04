@@ -109,16 +109,18 @@ class AmebaLS::Provider < Larimar::Provider
         )
       end
 
-      result << LSProtocol::CodeAction.new(
-        title: "Ignore #{issue.rule.name}",
-        diagnostics: [diagnostic],
-        kind: :quick_fix,
-        data: JSON::Any.new({
-          "uri"    => JSON::Any.new(document.uri.to_s),
-          "idx"    => JSON::Any.new(idx),
-          "ignore" => JSON::Any.new(true),
-        } of String => JSON::Any),
-      )
+      unless issue.rule.special?
+        result << LSProtocol::CodeAction.new(
+          title: "Ignore #{issue.rule.name}",
+          diagnostics: [diagnostic],
+          kind: :quick_fix,
+          data: JSON::Any.new({
+            "uri"    => JSON::Any.new(document.uri.to_s),
+            "idx"    => JSON::Any.new(idx),
+            "ignore" => JSON::Any.new(true),
+          } of String => JSON::Any),
+        )
+      end
     end
 
     result.sort_by! do |action|
