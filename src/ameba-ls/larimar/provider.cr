@@ -43,7 +43,7 @@ class AmebaLS::Provider < Larimar::Provider
     end
 
     Log.debug(&.emit("Running ameba",
-      source: source.path,
+      source: source.path.to_s,
       config: config_path,
     ))
 
