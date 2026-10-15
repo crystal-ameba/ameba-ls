@@ -3,6 +3,7 @@ class AmebaLS::Provider < Larimar::Provider
 
   Log = ::Larimar::Log.for(self)
 
+  # Rules that are disabled on change to avoid unnecessary diagnostics while typing.
   RULES_DISABLED = %w[
     Layout/TrailingBlankLines
     Layout/TrailingWhitespace
@@ -16,7 +17,7 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   def on_change(document : Larimar::TextDocument) : Nil
-    handle_ameba(document)
+    handle_ameba(document, RULES_DISABLED)
   end
 
   def on_save(document : Larimar::TextDocument) : Nil
@@ -29,7 +30,7 @@ class AmebaLS::Provider < Larimar::Provider
     publish_diagnostics(document, [] of LSProtocol::Diagnostic)
   end
 
-  private def handle_ameba(document : Larimar::TextDocument) : Nil
+  private def handle_ameba(document : Larimar::TextDocument, disabled_rules = nil) : Nil
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
 
@@ -51,8 +52,9 @@ class AmebaLS::Provider < Larimar::Provider
     config.sources = [source]
     config.formatter = formatter
 
-    # Disabling these as they're common when typing
-    config.update_rules(RULES_DISABLED, enabled: false)
+    if disabled_rules
+      config.update_rules(disabled_rules, enabled: false)
+    end
 
     begin
       Ameba::Runner.new(config).run
