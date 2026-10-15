@@ -18,4 +18,4 @@ dependencies:
     github: nobodywasishere/larimar
   ameba:
     github: crystal-ameba/ameba
-    version: ~> 1.7.0
+    branch: master
