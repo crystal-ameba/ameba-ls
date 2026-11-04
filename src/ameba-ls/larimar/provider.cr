@@ -258,16 +258,6 @@ class AmebaLS::Provider < Larimar::Provider
       )
     end
 
-    if (insert_after = action.insert_after) && !insert_after.empty?
-      edits << LSProtocol::TextEdit.new(
-        new_text: insert_after,
-        range: LSProtocol::Range.new(
-          start: end_pos,
-          end: end_pos,
-        ),
-      )
-    end
-
     if (replacement = action.replacement)
       edits << LSProtocol::TextEdit.new(
         new_text: replacement,
@@ -280,6 +270,17 @@ class AmebaLS::Provider < Larimar::Provider
       action.@children.each do |child|
         get_text_edits(document, edits, child)
       end
+    end
+
+    # Must follow the children, since clients keep the order of same-position inserts.
+    if (insert_after = action.insert_after) && !insert_after.empty?
+      edits << LSProtocol::TextEdit.new(
+        new_text: insert_after,
+        range: LSProtocol::Range.new(
+          start: end_pos,
+          end: end_pos,
+        ),
+      )
     end
   end
 end
