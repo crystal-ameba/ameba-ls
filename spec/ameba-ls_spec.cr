@@ -1,9 +1,10 @@
 require "./spec_helper"
+require "yaml"
 
 describe AmebaLS do
-  # TODO: Write tests
+  it "reports the version from shard.yml" do
+    shard = YAML.parse(File.read(Path[__DIR__, "..", "shard.yml"]))
 
-  it "works" do
-    true.should be_true
+    AmebaLS::VERSION.should eq(shard["version"].as_s)
   end
 end
