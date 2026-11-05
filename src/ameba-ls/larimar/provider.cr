@@ -46,6 +46,16 @@ class AmebaLS::Provider < Larimar::Provider
 
     document_path = Path[URI.decode(document.uri.path)]
     root = project_root(document_path)
+    config = load_config(root)
+
+    unless inspects?(config, document_path)
+      Log.debug(&.emit("Skipping a file not selected by `Globs` and `Excluded`",
+        source: document_path.to_s,
+        root: root.to_s,
+      ))
+      publish_diagnostics(document, [] of LSProtocol::Diagnostic)
+      return
+    end
 
     source = Ameba::Source.new(
       document.to_s,
@@ -54,12 +64,6 @@ class AmebaLS::Provider < Larimar::Provider
     )
     formatter = DiagnosticsFormatter.new
 
-    Log.debug(&.emit("Running ameba",
-      source: source.path.to_s,
-      root: root.to_s,
-    ))
-
-    config = load_config(root)
     config.sources = [source]
     config.formatter = formatter
 
@@ -71,12 +75,29 @@ class AmebaLS::Provider < Larimar::Provider
       end
     end
 
+    Log.debug(&.emit("Running ameba",
+      source: source.path.to_s,
+      root: root.to_s,
+    ))
+
     Ameba::Runner.new(config).run
 
     diagnostics = formatter.diagnostics
     @diagnostics_mutex.synchronize { @diagnostics[document.uri] = diagnostics }
 
     publish_diagnostics(document, diagnostics)
+  end
+
+  # Globs are validated upfront, yet `File.match?` still raises once
+  # a character set reaches a `\` ending the file name. The CLI can't
+  # inspect such a file either, since `Dir.glob` raises on it too.
+  private def inspects?(config : Config, path : Path) : Bool
+    config.inspects?(path)
+  rescue ex : File::BadPatternError
+    Log.debug(exception: ex, &.emit("Not inspecting a file the globs can't match",
+      path: path.to_s,
+    ))
+    false
   end
 
   # Returns the directory of the closest `shard.yml`, or of the file itself if there's none.
@@ -89,9 +110,20 @@ class AmebaLS::Provider < Larimar::Provider
 
   # An invalid config shouldn't leave the document without diagnostics, so
   # it falls back to the defaults, after letting the user know about the error.
+  #
+  # Malformed `Globs` or `Excluded` sections fall back to their defaults
+  # alone, keeping the rest of the config (e.g. rule settings) in effect,
+  # since the CLI only fails on them once it reaches the malformed part.
   private def load_config(root : Path)
-    Config.load(root: root).tap do
-      @config_errors_mutex.synchronize { @config_errors.delete(root) }
+    Config.load(root: root).tap do |config|
+      errors = config.reset_malformed_globs!
+      if errors.empty?
+        @config_errors_mutex.synchronize do
+          @config_errors.delete(root)
+        end
+      else
+        report_config_error(root, errors.join("; ") { |ex| ex.message || ex.class.name })
+      end
     end
   rescue ex
     report_config_error(root, ex.message || ex.class.name)
