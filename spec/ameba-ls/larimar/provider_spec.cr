@@ -54,6 +54,24 @@ describe AmebaLS::Provider do
       end
     end
 
+    it "doesn't report directives of the rules disabled on change as unneeded" do
+      harness = ProviderHarness.new
+      harness.provider.on_change(
+        harness.document("# ameba:disable Layout/TrailingWhitespace\nputs 1   \n")
+      )
+
+      harness.rule_names.should be_empty
+    end
+
+    it "still reports directives of the other rules as unneeded on change" do
+      harness = ProviderHarness.new
+      harness.provider.on_change(
+        harness.document("# ameba:disable Lint/DebugCalls\nputs 1\n")
+      )
+
+      harness.rule_names.should eq(["Lint/UnneededDisableDirective"])
+    end
+
     it "runs all of the rules on open and save" do
       code = "pp 1  \n\n\n"
 
