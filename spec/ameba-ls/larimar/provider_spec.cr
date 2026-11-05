@@ -102,6 +102,34 @@ describe AmebaLS::Provider do
     end
 
     describe "configuration" do
+      it "resolves rule's `Excluded` against the shard root" do
+        with_workspace("Lint/DebugCalls:\n  Excluded:\n    - gen/a.cr\n") do |uri|
+          root = Path[uri.path].parent
+          excluded, other = (root / "gen" / "a.cr").to_uri, (root / "gen" / "b.cr").to_uri
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", excluded)
+          harness.open("pp 1\n", other)
+
+          harness.rule_names(excluded).should be_empty
+          harness.rule_names(other).should eq(["Lint/DebugCalls"])
+        end
+      end
+
+      it "looks for .ameba.yml starting from the shard root, not the working directory" do
+        with_workspace("Lint/DebugCalls:\n  Enabled: false\n") do |uri|
+          nested = Path[uri.path].parent / "nested"
+          Dir.mkdir_p(nested)
+          File.write(nested / "shard.yml", "name: nested\nversion: 0.0.0\n")
+          nested_uri = (nested / "subject.cr").to_uri
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", nested_uri)
+
+          harness.rule_names(nested_uri).should be_empty
+        end
+      end
+
       it "uses .ameba.yml from the closest shard root" do
         with_workspace("Lint/DebugCalls:\n  Enabled: false\n") do |uri|
           harness = ProviderHarness.new

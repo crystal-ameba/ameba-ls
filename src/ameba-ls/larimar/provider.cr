@@ -34,21 +34,14 @@ class AmebaLS::Provider < Larimar::Provider
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
 
-    workspace_folder = Larimar::Workspace
-      .find_closest_shard_yml(document.uri)
-      .try(&.path)
-
-    if workspace_folder
-      config_path = Path[workspace_folder, Ameba::Config::Loader::FILENAME].to_s
-      config_path = nil unless File.exists?(config_path)
-    end
+    root = project_root(document)
 
     Log.debug(&.emit("Running ameba",
       source: source.path.to_s,
-      config: config_path,
+      root: root.to_s,
     ))
 
-    config = Config.load(path: config_path)
+    config = Config.load(root: root)
     config.sources = [source]
     config.formatter = formatter
 
@@ -65,6 +58,12 @@ class AmebaLS::Provider < Larimar::Provider
       diagnostics = formatter.diagnostics
 
     publish_diagnostics(document, diagnostics)
+  end
+
+  # Returns the directory of the closest `shard.yml`, or of the file itself if there's none.
+  private def project_root(document : Larimar::TextDocument) : Path
+    shard_uri = Larimar::Workspace.find_closest_shard_yml(document.uri)
+    shard_uri ? Path[shard_uri.path] : Path[document.uri.path].parent
   end
 
   private def publish_diagnostics(document, diagnostics : Array(LSProtocol::Diagnostic)) : Nil
