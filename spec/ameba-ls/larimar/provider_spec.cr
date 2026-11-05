@@ -16,6 +16,16 @@ private def action_titles(actions)
   actions.map(&.title)
 end
 
+private def with_spec_file(&)
+  with_workspace do |uri|
+    path = Path[uri.path].parent / "spec" / "foo.cr"
+    Dir.mkdir_p(path.parent)
+    File.write(path, "puts 1\n")
+
+    yield path.to_uri, path
+  end
+end
+
 describe AmebaLS::Provider do
   describe "diagnostics lifecycle" do
     it "publishes diagnostics on open" do
@@ -497,6 +507,46 @@ describe AmebaLS::Provider do
       action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
 
       apply_edits(document, harness.resolve(action)).should eq("foo <baz>")
+    end
+  end
+
+  describe "Lint/SpecFilename" do
+    it "is reported for spec files without the `_spec` suffix" do
+      with_spec_file do |uri, _path|
+        harness = ProviderHarness.new
+        harness.open("puts 1\n", uri)
+
+        harness.rule_names(uri).should eq(["Lint/SpecFilename"])
+      end
+    end
+
+    it "only offers to ignore the issue" do
+      with_spec_file do |uri, _path|
+        harness = ProviderHarness.new
+        document = harness.open("puts 1\n", uri)
+
+        harness.actions(document, lsp_range(0, 0, 0, 0)).map(&.title)
+          .should eq(["Ignore Lint/SpecFilename"])
+      end
+    end
+
+    it "doesn't rename the file when resolving a fix action" do
+      with_spec_file do |uri, path|
+        harness = ProviderHarness.new
+        document = harness.open("puts 1\n", uri)
+
+        ignore = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+        fix = LSProtocol::CodeAction.new(
+          title: "Fix Lint/SpecFilename",
+          diagnostics: ignore.diagnostics,
+          data: JSON::Any.new(ignore.data.should_not(be_nil).as_h.reject("ignore")),
+        )
+
+        harness.provider.resolve_code_action(fix, nil).should be_nil
+
+        File.exists?(path).should be_true
+        File.exists?(path.sibling("foo_spec.cr")).should be_false
+      end
     end
   end
 
