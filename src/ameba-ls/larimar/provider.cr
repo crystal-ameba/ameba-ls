@@ -44,8 +44,8 @@ class AmebaLS::Provider < Larimar::Provider
     # Whatever happens below, the previous issues no longer match the document.
     @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
-    document_path = Path[document.uri.path]
-    root = project_root(document)
+    document_path = Path[URI.decode(document.uri.path)]
+    root = project_root(document_path)
 
     source = Ameba::Source.new(
       document.to_s,
@@ -80,9 +80,11 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   # Returns the directory of the closest `shard.yml`, or of the file itself if there's none.
-  private def project_root(document : Larimar::TextDocument) : Path
-    shard_uri = Larimar::Workspace.find_closest_shard_yml(document.uri)
-    shard_uri ? Path[shard_uri.path] : Path[document.uri.path].parent
+  private def project_root(path : Path) : Path
+    # Larimar treats `URI#path` as a file path, in both directions (see `Path#to_uri`),
+    # hence it's neither encoded here, nor decoded in the result.
+    shard_uri = Larimar::Workspace.find_closest_shard_yml(URI.new(scheme: "file", path: path.to_s))
+    shard_uri ? Path[shard_uri.path] : path.parent
   end
 
   # An invalid config shouldn't leave the document without diagnostics, so
