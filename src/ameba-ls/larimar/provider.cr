@@ -56,10 +56,7 @@ class AmebaLS::Provider < Larimar::Provider
       config.update_rules(disabled_rules, enabled: false)
     end
 
-    begin
-      Ameba::Runner.new(config).run
-    rescue CancellationException
-    end
+    Ameba::Runner.new(config).run
 
     @diagnostics[document.uri] =
       diagnostics = formatter.diagnostics
@@ -88,6 +85,8 @@ class AmebaLS::Provider < Larimar::Provider
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
+    raise_if_cancelled(token)
+
     return unless (diagnostics = @diagnostics[document.uri]?)
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
@@ -131,10 +130,17 @@ class AmebaLS::Provider < Larimar::Provider
     result
   end
 
+  # `CancellationToken#cancelled!` raises unconditionally.
+  private def raise_if_cancelled(token : CancellationToken?) : Nil
+    raise CancellationException.new if token.try(&.cancelled?)
+  end
+
   def resolve_code_action(
     code_action : LSProtocol::CodeAction,
     token : CancellationToken?,
   ) : LSProtocol::CodeAction?
+    raise_if_cancelled(token)
+
     return unless (data = code_action.data.try(&.as_h?)) &&
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
                   (document_uri = URI.parse(document_uri_string)) &&

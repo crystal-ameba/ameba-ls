@@ -44,15 +44,6 @@ describe AmebaLS::DiagnosticsFormatter do
       formatter.diagnostics.size.should eq(2)
     end
 
-    it "raises when given a cancellation token" do
-      formatter = AmebaLS::DiagnosticsFormatter.new
-      formatter.cancellation_token = CancellationTokenSource.new.token
-
-      expect_raises(CancellationException) do
-        formatter.source_finished(source_with_issue)
-      end
-    end
-
     {
       Ameba::Severity::Error      => LSProtocol::DiagnosticSeverity::Error,
       Ameba::Severity::Warning    => LSProtocol::DiagnosticSeverity::Warning,

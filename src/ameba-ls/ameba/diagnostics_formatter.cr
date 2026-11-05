@@ -13,7 +13,6 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
   private UNNECESSARY_TAG_PATTERN =
     %r{^(\w+)/(#{UNNECESSARY_TAG_KEYWORDS.join('|')})}i
 
-  property cancellation_token : CancellationToken?
   getter diagnostics = Array(IssueDiagnostic).new
 
   @mutex = Mutex.new
@@ -23,8 +22,6 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
 
     source.issues.each do |issue|
       next if issue.disabled?
-
-      cancellation_token.try(&.cancelled!)
 
       if issue.rule.name.matches?(UNNECESSARY_TAG_PATTERN)
         tags = [:unnecessary] of LSProtocol::DiagnosticTag
