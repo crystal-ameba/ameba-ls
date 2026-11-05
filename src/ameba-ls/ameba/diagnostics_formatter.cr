@@ -4,6 +4,13 @@ class AmebaLS::IssueDiagnostic
 
   def initialize(@issue, @diagnostic)
   end
+
+  # Returns `true` if *other* (sent back by the client) describes the same issue.
+  def matches?(other : LSProtocol::Diagnostic) : Bool
+    diagnostic.code == other.code &&
+      diagnostic.range == other.range &&
+      diagnostic.message == other.message
+  end
 end
 
 class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter

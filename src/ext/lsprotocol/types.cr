@@ -19,6 +19,10 @@ class LSProtocol::Position
 end
 
 class LSProtocol::Range
+  def ==(other : self)
+    start == other.start && self.end == other.end
+  end
+
   def overlaps?(other : self)
     (start..self.end)
       .overlaps?(other.start..other.end)
