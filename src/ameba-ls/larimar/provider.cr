@@ -12,6 +12,10 @@ class AmebaLS::Provider < Larimar::Provider
 
   @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
 
+  # The errors users were already notified about, by the project root.
+  @config_errors = Hash(Path, String).new
+  @config_errors_mutex = Mutex.new
+
   def on_open(document : Larimar::TextDocument) : Nil
     handle_ameba(document)
   end
@@ -48,7 +52,7 @@ class AmebaLS::Provider < Larimar::Provider
       root: root.to_s,
     ))
 
-    config = Config.load(root: root)
+    config = load_config(root)
     config.sources = [source]
     config.formatter = formatter
 
@@ -72,6 +76,35 @@ class AmebaLS::Provider < Larimar::Provider
   private def project_root(document : Larimar::TextDocument) : Path
     shard_uri = Larimar::Workspace.find_closest_shard_yml(document.uri)
     shard_uri ? Path[shard_uri.path] : Path[document.uri.path].parent
+  end
+
+  # An invalid config shouldn't leave the document without diagnostics, so
+  # it falls back to the defaults, after letting the user know about the error.
+  private def load_config(root : Path)
+    Config.load(root: root).tap do
+      @config_errors_mutex.synchronize { @config_errors.delete(root) }
+    end
+  rescue ex
+    report_config_error(root, ex.message || ex.class.name)
+    Config.load(root: root, skip_reading_config: true)
+  end
+
+  # Called on every change, so the same error is reported only once.
+  private def report_config_error(root : Path, message : String) : Nil
+    already_reported = @config_errors_mutex.synchronize do
+      prev_message = @config_errors[root]?.tap { @config_errors[root] = message }
+      prev_message == message
+    end
+    return if already_reported
+
+    controller.server.send_msg(
+      LSProtocol::ShowMessageNotification.new(
+        params: LSProtocol::ShowMessageParams.new(
+          message: "#{root / Ameba::Config::Loader::FILENAME}: #{message}",
+          type: :error,
+        ),
+      )
+    )
   end
 
   private def publish_diagnostics(document, diagnostics : Array(LSProtocol::Diagnostic)) : Nil
