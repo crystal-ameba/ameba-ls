@@ -730,6 +730,17 @@ describe AmebaLS::Provider do
         .should eq("# a comment\n# ameba:disable Layout/TrailingWhitespace\nfoo\n")
     end
 
+    it "keeps the line endings of the document" do
+      harness = ProviderHarness.new
+      document = harness.document("bar\r\n  foo\r\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("bar\r\n  # ameba:disable Layout/TrailingWhitespace\r\n  foo\r\n")
+    end
+
     it "returns nil for an issue without a location" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
