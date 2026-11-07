@@ -31,6 +31,10 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   private def handle_ameba(document : Larimar::TextDocument, disabled_rules = nil) : Nil
+    # Other schemes (`untitled:`, `git:`) have no meaningful path on disk.
+    # For a relative one, `Larimar::Workspace.find_closest_shard_yml` never returns.
+    return unless document.uri.scheme == "file"
+
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
 

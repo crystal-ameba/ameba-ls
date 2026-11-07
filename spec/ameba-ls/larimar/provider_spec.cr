@@ -35,6 +35,17 @@ describe AmebaLS::Provider do
       harness.published.last["params"]["diagnostics"].as_a.should be_empty
     end
 
+    it "skips documents with a non-file URI" do
+      harness = ProviderHarness.new
+      uri = URI.parse("untitled:Untitled-1")
+      document = harness.open("pp 1\n", uri)
+
+      harness.published.should be_empty
+      harness.provider
+        .provide_code_actions(document, far_away_range, code_action_context, nil)
+        .should be_nil
+    end
+
     it "reports syntax errors" do
       harness = ProviderHarness.new
       harness.open("def foo(\n")
