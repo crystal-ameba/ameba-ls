@@ -14,8 +14,8 @@ private class ClientSession
   @process : Process
   @id = 0
 
-  def initialize
-    @process = Process.new(BINARY_PATH,
+  def initialize(args = [] of String)
+    @process = Process.new(BINARY_PATH, args,
       input: :pipe,
       output: :pipe,
       error: :close,
@@ -109,6 +109,17 @@ describe "ameba-ls executable" do
       status.success?.should be_true
       output.should contain("Language server for Ameba")
       output.should contain("--version")
+    end
+  end
+
+  it "accepts the --stdio option" do
+    session = ClientSession.new(["--stdio"])
+
+    begin
+      init = session.request("initialize", {processId: nil, rootUri: nil, capabilities: {} of String => String})
+      init["result"]["serverInfo"]["name"].should eq("ameba-ls")
+    ensure
+      session.close
     end
   end
 

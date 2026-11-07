@@ -15,6 +15,9 @@ OptionParser.parse do |parser|
     exit
   end
 
+  # Passed by some of the clients. It's the only supported transport anyway.
+  parser.on("--stdio", "Communicate over stdio (default)") { }
+
   parser.on("-h", "--help", "Show help") do
     puts parser
     exit
