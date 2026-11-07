@@ -131,6 +131,19 @@ class AmebaLS::Provider < Larimar::Provider
     result.sort_by! do |action|
       action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
     end
+
+    # Applies to the whole file, so it's offered regardless of the requested range.
+    if diagnostics.any?(&.issue.correctable?)
+      result << LSProtocol::CodeAction.new(
+        title: "Fix all auto-correctable issues",
+        kind: :source_fix_all,
+        data: JSON::Any.new({
+          "uri"     => JSON::Any.new(document.uri.to_s),
+          "fix_all" => JSON::Any.new(true),
+        } of String => JSON::Any),
+      )
+    end
+
     result
   end
 
@@ -142,9 +155,16 @@ class AmebaLS::Provider < Larimar::Provider
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
                   (document_uri = URI.parse(document_uri_string)) &&
                   (document = controller.@documents[document_uri]?) &&
-                  (diagnostic = code_action.diagnostics.try(&.first?)) &&
+                  (diagnostics = @diagnostics[document_uri]?)
+
+    if data["fix_all"]?.try(&.as_bool?)
+      return document.mutex.synchronize do
+        resolve_fix_all_code_action(document, diagnostics)
+      end
+    end
+
+    return unless (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (diagnostic_idx = data["idx"]?.try(&.as_i?)) &&
-                  (diagnostics = @diagnostics[document_uri]?) &&
                   (issue = diagnostics[diagnostic_idx]?.try(&.issue))
 
     document.mutex.synchronize do
@@ -228,22 +248,35 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   private def resolve_fix_code_action(document, diagnostic, issue)
+    LSProtocol::CodeAction.new(
+      title: "Fix #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      edit: correction_edit(document, {issue}),
+      kind: :quick_fix,
+      is_preferred: true,
+    )
+  end
+
+  private def resolve_fix_all_code_action(document, diagnostics)
+    correctable = diagnostics.select(&.issue.correctable?)
+
+    LSProtocol::CodeAction.new(
+      title: "Fix all auto-correctable issues",
+      diagnostics: correctable.map(&.diagnostic),
+      edit: correction_edit(document, correctable.map(&.issue)),
+      kind: :source_fix_all,
+    )
+  end
+
+  private def correction_edit(document, issues : Enumerable(Ameba::Issue)) : LSProtocol::WorkspaceEdit
     corrector = Ameba::Source::Corrector.new(document.to_s)
-    issue.correct(corrector)
+    issues.each(&.correct(corrector))
 
     text_edits = [] of LSProtocol::TextEdit
     get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
 
-    workspace_edit = LSProtocol::WorkspaceEdit.new(
+    LSProtocol::WorkspaceEdit.new(
       changes: {document.uri => text_edits},
-    )
-
-    LSProtocol::CodeAction.new(
-      title: "Fix #{issue.rule.name}",
-      diagnostics: [diagnostic],
-      edit: workspace_edit,
-      kind: :quick_fix,
-      is_preferred: true,
     )
   end
 
