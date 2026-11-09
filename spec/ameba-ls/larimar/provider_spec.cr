@@ -244,6 +244,45 @@ describe AmebaLS::Provider do
     end
   end
 
+  describe "cancellation" do
+    cancelled_token = -> {
+      CancellationTokenSource.new.tap(&.cancel).token
+    }
+
+    it "aborts providing code actions" do
+      harness = ProviderHarness.new
+      document = harness.open("pp 1\n")
+
+      expect_raises(CancellationException) do
+        harness.provider
+          .provide_code_actions(document, far_away_range, code_action_context, cancelled_token.call)
+      end
+    end
+
+    it "aborts resolving a code action" do
+      harness = ProviderHarness.new
+      document = harness.open("pp 1\n")
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      expect_raises(CancellationException) do
+        harness.provider.resolve_code_action(action, cancelled_token.call)
+      end
+    end
+
+    it "carries on with a token that wasn't cancelled" do
+      harness = ProviderHarness.new
+      document = harness.open("pp 1\n")
+      token = CancellationTokenSource.new.token
+
+      actions = harness.provider
+        .provide_code_actions(document, lsp_range(0, 0, 0, 0), code_action_context, token)
+        .should_not(be_nil)
+      action = actions.first.as(LSProtocol::CodeAction)
+
+      harness.provider.resolve_code_action(action, token).should_not be_nil
+    end
+  end
+
   describe "#resolve_code_action" do
     it "returns nil when the action carries no data" do
       harness = ProviderHarness.new
