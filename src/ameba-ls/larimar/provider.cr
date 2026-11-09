@@ -53,7 +53,11 @@ class AmebaLS::Provider < Larimar::Provider
     config.formatter = formatter
 
     if disabled_rules
-      config.update_rules(disabled_rules, enabled: false)
+      # Excluding instead of disabling, since `Lint/UnneededDisableDirective`
+      # would otherwise report inline directives for these rules as unneeded.
+      config.rules.each do |rule|
+        rule.excluded = Set{source.path.to_s} if rule.name.in?(disabled_rules)
+      end
     end
 
     Ameba::Runner.new(config).run
