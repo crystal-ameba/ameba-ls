@@ -35,6 +35,9 @@ class AmebaLS::Provider < Larimar::Provider
     # For a relative one, `Larimar::Workspace.find_closest_shard_yml` never returns.
     return unless document.uri.scheme == "file"
 
+    # Whatever happens below, the previous issues no longer match the document.
+    @diagnostics.delete(document.uri)
+
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
 
@@ -94,7 +97,7 @@ class AmebaLS::Provider < Larimar::Provider
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
-    diagnostics.each_with_index do |diagnostic, idx|
+    diagnostics.each do |diagnostic|
       issue, diagnostic =
         diagnostic.issue, diagnostic.diagnostic
 
@@ -107,8 +110,8 @@ class AmebaLS::Provider < Larimar::Provider
           kind: :quick_fix,
           is_preferred: true,
           data: JSON::Any.new({
-            "uri" => JSON::Any.new(document.uri.to_s),
-            "idx" => JSON::Any.new(idx),
+            "uri"     => JSON::Any.new(document.uri.to_s),
+            "version" => JSON::Any.new(document.version),
           } of String => JSON::Any),
         )
       end
@@ -119,9 +122,9 @@ class AmebaLS::Provider < Larimar::Provider
           diagnostics: [diagnostic],
           kind: :quick_fix,
           data: JSON::Any.new({
-            "uri"    => JSON::Any.new(document.uri.to_s),
-            "idx"    => JSON::Any.new(idx),
-            "ignore" => JSON::Any.new(true),
+            "uri"     => JSON::Any.new(document.uri.to_s),
+            "version" => JSON::Any.new(document.version),
+            "ignore"  => JSON::Any.new(true),
           } of String => JSON::Any),
         )
       end
@@ -149,11 +152,15 @@ class AmebaLS::Provider < Larimar::Provider
                   (document_uri = URI.parse(document_uri_string)) &&
                   (document = controller.@documents[document_uri]?) &&
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
-                  (diagnostic_idx = data["idx"]?.try(&.as_i?)) &&
-                  (diagnostics = @diagnostics[document_uri]?) &&
-                  (issue = diagnostics[diagnostic_idx]?.try(&.issue))
+                  (version = data["version"]?.try(&.as_i?))
 
     document.mutex.synchronize do
+      # The document has changed since the action was offered,
+      # hence the issue it was offered for might not be there anymore.
+      next unless version == document.version
+      next unless (diagnostics = @diagnostics[document_uri]?)
+      next unless (issue = diagnostics.find(&.matches?(diagnostic)).try(&.issue))
+
       if data["ignore"]?.try(&.as_bool?)
         resolve_ignore_code_action(document, diagnostic, issue)
       else

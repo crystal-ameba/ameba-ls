@@ -21,6 +21,14 @@ describe LSProtocol::Position do
 end
 
 describe LSProtocol::Range do
+  describe "#==" do
+    it "compares by value" do
+      (lsp_range(1, 0, 1, 9) == lsp_range(1, 0, 1, 9)).should be_true
+      (lsp_range(1, 0, 1, 9) == lsp_range(1, 0, 1, 8)).should be_false
+      (lsp_range(1, 0, 1, 9) == lsp_range(0, 0, 1, 9)).should be_false
+    end
+  end
+
   describe "#overlaps?" do
     it "returns true for a position inside of the range" do
       lsp_range(1, 0, 1, 9).overlaps?(lsp_range(1, 5, 1, 5)).should be_true

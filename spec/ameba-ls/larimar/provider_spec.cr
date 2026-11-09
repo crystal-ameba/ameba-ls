@@ -311,15 +311,15 @@ describe AmebaLS::Provider do
       harness.provider.resolve_code_action(action, nil).should be_nil
     end
 
-    it "returns nil when the issue index is missing or out of bounds" do
+    it "returns nil when the document version is missing or outdated" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
       harness.stub_diagnostics(document.uri, [stub_diagnostic])
       diagnostic = harness.actions(document, lsp_range(0, 0, 0, 0)).first.diagnostics
 
-      {nil, 1}.each do |idx|
+      {nil, document.version + 1}.each do |version|
         data = {"uri" => JSON::Any.new(document.uri.to_s)} of String => JSON::Any
-        data["idx"] = JSON::Any.new(idx.to_i64) if idx
+        data["version"] = JSON::Any.new(version.to_i64) if version
 
         action = LSProtocol::CodeAction.new(
           title: "x",
@@ -330,6 +330,46 @@ describe AmebaLS::Provider do
       end
     end
 
+    it "returns nil when the document has changed since the action was offered" do
+      harness = ProviderHarness.new
+      document = harness.open("puts 1.is_a?(Nil)\nputs 2.is_a?(Nil)\nputs 3.is_a?(Nil)\n")
+      action = harness.actions(document, lsp_range(1, 0, 1, 20))
+        .find!(&.title.==("Fix Style/IsANil"))
+
+      # The remaining issues match the one above in everything but the document version
+      document.update_whole("puts 2.is_a?(Nil)\nputs 3.is_a?(Nil)\n", version: 1)
+      harness.provider.on_change(document)
+
+      harness.provider.resolve_code_action(action, nil).should be_nil
+    end
+
+    it "returns nil when the diagnostic is no longer there" do
+      harness = ProviderHarness.new
+      document = harness.open("puts 1.is_a?(Nil)\n")
+      action = harness.actions(document, lsp_range(0, 0, 0, 20))
+        .find!(&.title.==("Fix Style/IsANil"))
+
+      document.update_whole("puts 1\n")
+      harness.provider.on_save(document)
+
+      harness.provider.resolve_code_action(action, nil).should be_nil
+    end
+
+    it "finds the issue after the same version got analysed with different rules" do
+      harness = ProviderHarness.new
+      document = harness.document("puts 1.is_a?(Nil)   \nputs 2.is_a?(Nil)\n")
+
+      harness.provider.on_change(document)
+      action = harness.actions(document, lsp_range(1, 0, 1, 20))
+        .find!(&.title.==("Fix Style/IsANil"))
+
+      # Shifts the following issues, due to the rules disabled on change
+      harness.provider.on_save(document)
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("puts 1.is_a?(Nil)   \nputs 2.nil?\n")
+    end
+
     it "returns nil when a single issue action has no diagnostics" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
@@ -338,8 +378,8 @@ describe AmebaLS::Provider do
       action = LSProtocol::CodeAction.new(
         title: "x",
         data: JSON::Any.new({
-          "uri" => JSON::Any.new(document.uri.to_s),
-          "idx" => JSON::Any.new(0_i64),
+          "uri"     => JSON::Any.new(document.uri.to_s),
+          "version" => JSON::Any.new(document.version.to_i64),
         } of String => JSON::Any),
       )
       harness.provider.resolve_code_action(action, nil).should be_nil
