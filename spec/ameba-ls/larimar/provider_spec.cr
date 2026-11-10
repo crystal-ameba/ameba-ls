@@ -2,14 +2,17 @@ require "../../spec_helper"
 require "file_utils"
 
 private def with_workspace(ameba_yml = nil, &)
-  dir = Path[File.tempname("ameba-ls-spec")]
+  tmp_dir = Path[File.tempname("ameba-ls-spec")]
+  # Nested, since `Larimar::Workspace.find_closest_shard_yml` skips a `shard.yml`
+  # with an existing `../../lib`, which right within `/tmp` is `/lib` on Linux.
+  dir = tmp_dir / "workspace"
   Dir.mkdir_p(dir)
   File.write(dir / "shard.yml", "name: spec\nversion: 0.0.0\n")
   File.write(dir / ".ameba.yml", ameba_yml) if ameba_yml
 
   yield (dir / "subject.cr").to_uri
 ensure
-  FileUtils.rm_rf(dir.to_s) if dir
+  FileUtils.rm_rf(tmp_dir.to_s) if tmp_dir
 end
 
 private def published_codes(harness)
@@ -228,7 +231,7 @@ describe AmebaLS::Provider do
             File.write(root / ".ameba.yml", "Lint/DebugCalls:\n  Enabled: false\n")
 
             # Percent-encoded, the way clients send it (unlike `Path#to_uri`)
-            encoded_uri = URI.parse("file://#{URI.encode_path((root / "subject.cr").to_s)}")
+            encoded_uri = URI.new("file", path: URI.encode_path((root / "subject.cr").to_posix.to_s))
             encoded_uri.path.should end_with("/#{encoded}/subject.cr")
 
             harness = ProviderHarness.new
@@ -308,20 +311,23 @@ describe AmebaLS::Provider do
       end
     end
 
-    it "doesn't inspect a file the globs raise on" do
-      with_workspace("Globs:\n  - src/*[ab]\n") do |uri|
-        root = Path[uri.path].parent
-        harness = ProviderHarness.new
+    # On Windows, `\` is a path separator, so a file name can't end with it.
+    {% unless flag?(:windows) %}
+      it "doesn't inspect a file the globs raise on" do
+        with_workspace("Globs:\n  - src/*[ab]\n") do |uri|
+          root = Path[uri.path].parent
+          harness = ProviderHarness.new
 
-        # A character set reaching a `\` ending the file name raises,
-        # as it does for `Dir.glob`. `Path#to_uri` would escape it.
-        harness.open("pp 1\n", URI.new("file", path: "#{root}/src/a\\"))
-        published_codes(harness).should be_empty
+          # A character set reaching a `\` ending the file name raises,
+          # as it does for `Dir.glob`. `Path#to_uri` would escape it.
+          harness.open("pp 1\n", URI.new("file", path: "#{root}/src/a\\"))
+          published_codes(harness).should be_empty
 
-        harness.open("pp 1\n", (root / "src" / "b").to_uri)
-        published_codes(harness).should eq(["Lint/DebugCalls"])
+          harness.open("pp 1\n", (root / "src" / "b").to_uri)
+          published_codes(harness).should eq(["Lint/DebugCalls"])
+        end
       end
-    end
+    {% end %}
 
     it "clears diagnostics and code actions after a file becomes excluded" do
       with_workspace do |uri|

@@ -114,12 +114,13 @@ module AmebaLS
 
       # Glob metacharacters and hidden entries in the root itself must not
       # affect matching, like they don't for `Dir.glob` run from within it.
-      {
-        "glob_utils",
-        "glob_utils[a]{b,c}*?",
-        "glob_utils[unterminated",
-        ".glob_utils[hidden]/root",
-      }.each do |root_name|
+      root_names = ["glob_utils", "glob_utils[unterminated", ".glob_utils[hidden]/root"]
+      # Windows doesn't allow `*` and `?` in file names.
+      {% unless flag?(:windows) %}
+        root_names << "glob_utils[a]{b,c}*?"
+      {% end %}
+
+      root_names.each do |root_name|
         it "agrees with #find_files_by_globs (root: #{root_name})" do
           # Resolved, so `Dir.current` within it (on macOS: `/private/var/…`)
           # doesn't differ from it, making `Dir.glob` see the root after all.
@@ -160,11 +161,11 @@ module AmebaLS
               # current directory, which is how the CLI is typically run.
               found = Dir.cd(tmp_root) do
                 subject.find_files_by_globs(globs, tmp_root)
-                  .map { |path| Path[path].expand.to_s }
+                  .map { |path| Path[path].expand.to_posix.to_s }
               end
 
               files.each do |file|
-                path = (tmp_root / file).to_s
+                path = (tmp_root / file).to_posix.to_s
                 matched = subject.matches_globs?(globs, path, tmp_root)
 
                 unless matched == found.includes?(path)
@@ -183,17 +184,28 @@ module AmebaLS
       it "accepts well-formed globs" do
         globs = [
           "**/*.cr", "!lib", "src/[a-c].cr", "src/[^a].cr", "src/[]].cr",
-          "src/[^]].cr", "src/[a-].cr", "src/[\\]].cr", "src/\\[a.cr",
-          "{src,spec}/**/*.cr", "src/*{a.cr", "src/[a.cr/../b.cr",
+          "src/[^]].cr", "src/[a-].cr", "{src,spec}/**/*.cr", "src/*{a.cr",
+          "src/[a.cr/../b.cr",
         ]
+        # On Windows, `\` is a path separator rather than an escape character,
+        # in globs as well (see `Ameba::GlobUtils#expand`).
+        {% unless flag?(:windows) %}
+          globs.concat ["src/[\\]].cr", "src/\\[a.cr"]
+        {% end %}
         subject.validate_globs!(globs)
       end
 
       it "raises on malformed globs, whichever path they would be matched against" do
-        [
-          "src/[a.cr", "src/[^a.cr", "src/[].cr", "src/*\\", "src/[a\\",
-          "{src,spec/[a}/*.cr", "!src/[a.cr", "src/*.cr/[a/*.cr",
-        ].each do |glob|
+        globs = [
+          "src/[a.cr", "src/[^a.cr", "src/[].cr", "{src,spec/[a}/*.cr",
+          "!src/[a.cr", "src/*.cr/[a/*.cr",
+        ]
+        # On Windows, `\` is a path separator rather than an escape character.
+        {% unless flag?(:windows) %}
+          globs.concat ["src/*\\", "src/[a\\"]
+        {% end %}
+
+        globs.each do |glob|
           expect_raises(File::BadPatternError, glob) do
             subject.validate_globs!([glob])
           end
