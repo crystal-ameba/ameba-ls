@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -29,6 +29,9 @@ jobs:
 
       - name: Install dependencies
         run: shards install
+
+      - name: Run specs
+        run: crystal spec --order random
 
       - name: Build Ameba LS binary
         run: shards build
