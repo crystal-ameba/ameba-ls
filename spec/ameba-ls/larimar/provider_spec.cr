@@ -12,6 +12,10 @@ ensure
   FileUtils.rm_rf(dir.to_s) if dir
 end
 
+private def published_codes(harness)
+  harness.published.last["params"]["diagnostics"].as_a.map(&.["code"].as_s)
+end
+
 private def action_titles(actions)
   actions.map(&.title)
 end
@@ -242,6 +246,96 @@ describe AmebaLS::Provider do
 
           harness.rule_names(uri).should eq(["Lint/DebugCalls"])
         end
+      end
+    end
+  end
+
+  describe "top-level config sections" do
+    it "honors `Excluded`" do
+      with_workspace("Excluded:\n  - gen\n") do |uri|
+        root = Path[uri.path].parent
+        harness = ProviderHarness.new
+
+        harness.open("pp 1\n", (root / "gen" / "deep" / "a.cr").to_uri)
+        published_codes(harness).should be_empty
+
+        harness.open("pp 1\n", (root / "src" / "a.cr").to_uri)
+        published_codes(harness).should eq(["Lint/DebugCalls"])
+      end
+    end
+
+    it "honors `Globs`" do
+      with_workspace("Globs:\n  - src/**/*.cr\n") do |uri|
+        root = Path[uri.path].parent
+        harness = ProviderHarness.new
+
+        harness.open("pp 1\n", (root / "other" / "a.cr").to_uri)
+        published_codes(harness).should be_empty
+
+        harness.open("pp 1\n", (root / "src" / "a.cr").to_uri)
+        published_codes(harness).should eq(["Lint/DebugCalls"])
+      end
+    end
+
+    it "reports a malformed glob once, falling back to the default section for every file" do
+      with_workspace("Excluded:\n  - gen/[a.cr\n") do |uri|
+        root = Path[uri.path].parent
+        harness = ProviderHarness.new
+        config_errors = -> {
+          harness.published.select(&.["method"].==("window/showMessage"))
+        }
+
+        # Only matching paths under `gen` would reach the malformed part.
+        {root / "gen" / "a.cr", root / "src" / "a.cr"}.each do |path|
+          harness.open("pp 1\n", path.to_uri)
+          published_codes(harness).should eq(["Lint/DebugCalls"])
+        end
+
+        config_errors.call.size.should eq(1)
+        config_errors.call.first["params"]["message"].as_s.should contain("gen/[a.cr")
+      end
+    end
+
+    it "keeps the rest of the config when a glob is malformed" do
+      with_workspace("Excluded:\n  - gen/[a.cr\nLint/DebugCalls:\n  Enabled: false\n") do |uri|
+        root = Path[uri.path].parent
+        harness = ProviderHarness.new
+
+        harness.open("pp 1\n", (root / "src" / "a.cr").to_uri)
+        published_codes(harness).should be_empty
+
+        harness.published.count(&.["method"].==("window/showMessage")).should eq(1)
+      end
+    end
+
+    it "doesn't inspect a file the globs raise on" do
+      with_workspace("Globs:\n  - src/*[ab]\n") do |uri|
+        root = Path[uri.path].parent
+        harness = ProviderHarness.new
+
+        # A character set reaching a `\` ending the file name raises,
+        # as it does for `Dir.glob`. `Path#to_uri` would escape it.
+        harness.open("pp 1\n", URI.new("file", path: "#{root}/src/a\\"))
+        published_codes(harness).should be_empty
+
+        harness.open("pp 1\n", (root / "src" / "b").to_uri)
+        published_codes(harness).should eq(["Lint/DebugCalls"])
+      end
+    end
+
+    it "clears diagnostics and code actions after a file becomes excluded" do
+      with_workspace do |uri|
+        harness = ProviderHarness.new
+        document = harness.open("pp 1\n", uri)
+        published_codes(harness).should eq(["Lint/DebugCalls"])
+
+        File.write(Path[uri.path].parent / ".ameba.yml", "Excluded:\n  - subject.cr\n")
+        harness.provider.on_change(document)
+
+        published_codes(harness).should be_empty
+        harness.provider
+          .provide_code_actions(document, lsp_range(0, 0, 0, 0), code_action_context, nil)
+          .should be_nil
       end
     end
   end
