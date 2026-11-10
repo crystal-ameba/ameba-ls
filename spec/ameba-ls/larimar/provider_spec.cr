@@ -168,6 +168,43 @@ describe AmebaLS::Provider do
         end
       end
 
+      it "falls back to the defaults on an invalid .ameba.yml" do
+        with_workspace("a: [\n") do |uri|
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", uri)
+
+          harness.rule_names(uri).should eq(["Lint/DebugCalls"])
+          harness.published.last["method"].should eq("textDocument/publishDiagnostics")
+        end
+      end
+
+      it "reports an invalid .ameba.yml only once, until it gets fixed and broken again" do
+        with_workspace("a: [\n") do |uri|
+          harness = ProviderHarness.new
+          config_errors = -> {
+            harness.published.select(&.["method"].==("window/showMessage"))
+          }
+
+          document = harness.open("pp 1\n", uri)
+          harness.provider.on_change(document)
+
+          config_errors.call.size.should eq(1)
+          message = config_errors.call.first["params"]
+          message["type"].should eq(LSProtocol::MessageType::Error.value)
+          message["message"].as_s.should contain(".ameba.yml")
+
+          config_path = Path[uri.path].parent / ".ameba.yml"
+
+          File.write(config_path, "Lint/DebugCalls:\n  Enabled: false\n")
+          harness.provider.on_change(document)
+          harness.rule_names(uri).should be_empty
+
+          File.write(config_path, "a: [\n")
+          harness.provider.on_change(document)
+          config_errors.call.size.should eq(2)
+        end
+      end
+
       it "uses the defaults when the shard root has no .ameba.yml" do
         with_workspace do |uri|
           harness = ProviderHarness.new
