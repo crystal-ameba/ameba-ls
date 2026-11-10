@@ -299,13 +299,14 @@ class AmebaLS::Provider < Larimar::Provider
 
     if text_edits.empty?
       indent = lines[line_number].match!(/^\s*/)[0]
+      newline = document.to_s.includes?("\r\n") ? "\r\n" : "\n"
 
       position = LSProtocol::Position.new(
         line: line_number.to_u32,
         character: 0_u32,
       )
       text_edits << LSProtocol::TextEdit.new(
-        new_text: "#{indent}# ameba:disable #{issue.rule.name}\n",
+        new_text: "#{indent}# ameba:disable #{issue.rule.name}#{newline}",
         range: LSProtocol::Range.new(
           start: position,
           end: position,
