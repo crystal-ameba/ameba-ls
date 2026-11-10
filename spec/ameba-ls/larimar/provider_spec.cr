@@ -215,6 +215,26 @@ describe AmebaLS::Provider do
         end
       end
 
+      it "uses .ameba.yml from a shard root with percent-encoded characters in its path" do
+        {"my project": "my%20project", "a%20b": "a%2520b"}.each do |name, encoded|
+          with_workspace do |uri|
+            root = Path[uri.path].parent / name.to_s
+            Dir.mkdir_p(root)
+            File.write(root / "shard.yml", "name: spec\nversion: 0.0.0\n")
+            File.write(root / ".ameba.yml", "Lint/DebugCalls:\n  Enabled: false\n")
+
+            # Percent-encoded, the way clients send it (unlike `Path#to_uri`)
+            encoded_uri = URI.parse("file://#{URI.encode_path((root / "subject.cr").to_s)}")
+            encoded_uri.path.should end_with("/#{encoded}/subject.cr")
+
+            harness = ProviderHarness.new
+            harness.open("pp 1\n", encoded_uri)
+
+            harness.rule_names(encoded_uri).should be_empty
+          end
+        end
+      end
+
       it "uses the defaults when the shard root has no .ameba.yml" do
         with_workspace do |uri|
           harness = ProviderHarness.new
