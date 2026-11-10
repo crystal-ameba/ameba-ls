@@ -99,11 +99,18 @@ class AmebaLS::Provider < Larimar::Provider
     end
     return if already_reported
 
+    show_message(
+      message: "#{root / Ameba::Config::Loader::FILENAME}: #{message}",
+      type: :error,
+    )
+  end
+
+  private def show_message(message : String, type : LSProtocol::MessageType) : Nil
     controller.server.send_msg(
       LSProtocol::ShowMessageNotification.new(
         params: LSProtocol::ShowMessageParams.new(
-          message: "#{root / Ameba::Config::Loader::FILENAME}: #{message}",
-          type: :error,
+          message: message,
+          type: type,
         ),
       )
     )
