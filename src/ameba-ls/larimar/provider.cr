@@ -10,7 +10,9 @@ class AmebaLS::Provider < Larimar::Provider
     Lint/Formatting
   ]
 
+  # Documents are handled in parallel, while this hash is shared between all of them.
   @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
+  @diagnostics_mutex = Mutex.new
 
   def on_open(document : Larimar::TextDocument) : Nil
     handle_ameba(document)
@@ -25,7 +27,7 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   def on_close(document : Larimar::TextDocument) : Nil
-    @diagnostics.delete(document.uri)
+    @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
     publish_diagnostics(document, [] of LSProtocol::Diagnostic)
   end
@@ -36,7 +38,7 @@ class AmebaLS::Provider < Larimar::Provider
     return unless document.uri.scheme == "file"
 
     # Whatever happens below, the previous issues no longer match the document.
-    @diagnostics.delete(document.uri)
+    @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
     source = Ameba::Source.new(document.to_s, document.uri.path)
     formatter = DiagnosticsFormatter.new
@@ -62,8 +64,8 @@ class AmebaLS::Provider < Larimar::Provider
 
     Ameba::Runner.new(config).run
 
-    @diagnostics[document.uri] =
-      diagnostics = formatter.diagnostics
+    diagnostics = formatter.diagnostics
+    @diagnostics_mutex.synchronize { @diagnostics[document.uri] = diagnostics }
 
     publish_diagnostics(document, diagnostics)
   end
@@ -97,7 +99,7 @@ class AmebaLS::Provider < Larimar::Provider
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
     raise_if_cancelled(token)
 
-    return unless (diagnostics = @diagnostics[document.uri]?)
+    return unless (diagnostics = @diagnostics_mutex.synchronize { @diagnostics[document.uri]? })
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
@@ -162,7 +164,7 @@ class AmebaLS::Provider < Larimar::Provider
       # The document has changed since the action was offered,
       # hence the issue it was offered for might not be there anymore.
       next unless version == document.version
-      next unless (diagnostics = @diagnostics[document_uri]?)
+      next unless (diagnostics = @diagnostics_mutex.synchronize { @diagnostics[document_uri]? })
       next unless (issue = diagnostics.find(&.matches?(diagnostic)).try(&.issue))
 
       if data["ignore"]?.try(&.as_bool?)
