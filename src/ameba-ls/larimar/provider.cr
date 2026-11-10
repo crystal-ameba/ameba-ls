@@ -44,10 +44,15 @@ class AmebaLS::Provider < Larimar::Provider
     # Whatever happens below, the previous issues no longer match the document.
     @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
-    source = Ameba::Source.new(document.to_s, document.uri.path)
-    formatter = DiagnosticsFormatter.new
-
+    document_path = Path[document.uri.path]
     root = project_root(document)
+
+    source = Ameba::Source.new(
+      document.to_s,
+      document_path,
+      document_path.relative_to(root),
+    )
+    formatter = DiagnosticsFormatter.new
 
     Log.debug(&.emit("Running ameba",
       source: source.path.to_s,
@@ -149,7 +154,7 @@ class AmebaLS::Provider < Larimar::Provider
 
       next unless diagnostic.range.overlaps?(range)
 
-      if issue.correctable?
+      if fixable?(issue)
         result << LSProtocol::CodeAction.new(
           title: "Fix #{issue.rule.name}",
           diagnostics: [diagnostic],
@@ -287,6 +292,8 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   private def resolve_fix_code_action(document, diagnostic, issue)
+    return unless fixable?(issue)
+
     corrector = Ameba::Source::Corrector.new(document.to_s)
     issue.correct(corrector)
 
@@ -304,6 +311,13 @@ class AmebaLS::Provider < Larimar::Provider
       kind: :quick_fix,
       is_preferred: true,
     )
+  end
+
+  # `Lint/SpecFilename` renames the file on disk from within its correction block,
+  # instead of scheduling an edit, so it must never run while resolving a code action.
+  private def fixable?(issue : Ameba::Issue) : Bool
+    issue.correctable? &&
+      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
   end
 
   private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
