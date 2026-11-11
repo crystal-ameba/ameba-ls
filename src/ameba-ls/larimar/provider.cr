@@ -148,8 +148,11 @@ class AmebaLS::Provider < Larimar::Provider
     end
     return if already_reported
 
+    config_path = root / Ameba::Config::Loader::FILENAME
+    config_path = Ameba::Config.find_config_path(config_path) || config_path
+
     show_message(
-      message: "#{root / Ameba::Config::Loader::FILENAME}: #{message}",
+      message: "#{config_path}: #{message}",
       type: :error,
     )
   end

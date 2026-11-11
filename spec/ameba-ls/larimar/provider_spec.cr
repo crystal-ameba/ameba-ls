@@ -249,6 +249,20 @@ describe AmebaLS::Provider do
         end
       end
 
+      it "names the .ameba.yml found in a parent directory of the shard root when reporting it" do
+        with_workspace do |uri|
+          config_path = Path[uri.path].parent.parent / ".ameba.yml"
+          File.write(config_path, "a: [\n")
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", uri)
+
+          message = harness.published
+            .find!(&.["method"].==("window/showMessage"))["params"]["message"].as_s
+          message.should start_with("#{config_path}: ")
+        end
+      end
+
       it "uses .ameba.yml from a shard root with percent-encoded characters in its path" do
         {"my project": "my%20project", "a%20b": "a%2520b"}.each do |name, encoded|
           with_workspace do |uri|
