@@ -14,8 +14,9 @@ private class ClientSession
   @process : Process
   @id = 0
 
-  def initialize(args = [] of String)
+  def initialize(args = [] of String, env = {"LOG_LEVEL" => nil} of String => String?)
     @process = Process.new(BINARY_PATH, args,
+      env: env,
       input: :pipe,
       output: :pipe,
       error: :close,
@@ -118,6 +119,44 @@ describe "ameba-ls executable" do
     begin
       init = session.request("initialize", {processId: nil, rootUri: nil, capabilities: {} of String => String})
       init["result"]["serverInfo"]["name"].should eq("ameba-ls")
+    ensure
+      session.close
+    end
+  end
+
+  it "logs only warnings and errors to the client by default" do
+    session = ClientSession.new
+
+    begin
+      session.request("initialize", {processId: nil, rootUri: nil, capabilities: {} of String => String})
+      session.notify("initialized", {} of String => String)
+      session.notify("textDocument/didOpen", {
+        textDocument: {uri: SPEC_URI.to_s, languageId: "crystal", version: 1, text: "pp 1\n"},
+      })
+
+      log_messages = [] of JSON::Any
+      session.read_until do |message|
+        log_messages << message if message["method"]? == "window/logMessage"
+        message["method"]? == "textDocument/publishDiagnostics"
+      end
+
+      log_messages.should be_empty
+    ensure
+      session.close
+    end
+  end
+
+  it "logs the messages exchanged with the client with LOG_LEVEL=info" do
+    session = ClientSession.new(env: {"LOG_LEVEL" => "info"})
+
+    begin
+      session.request("initialize", {processId: nil, rootUri: nil, capabilities: {} of String => String})
+      session.notify("initialized", {} of String => String)
+
+      session.read_until do |message|
+        message["method"]? == "window/logMessage" &&
+          message["params"]["message"].as_s.includes?("Received message")
+      end
     ensure
       session.close
     end
