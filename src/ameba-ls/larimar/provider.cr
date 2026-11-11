@@ -223,7 +223,7 @@ class AmebaLS::Provider < Larimar::Provider
         )
       end
 
-      unless issue.rule.special?
+      unless issue.rule.special? || breaks_shebang?(document, issue)
         result << LSProtocol::CodeAction.new(
           title: "Ignore #{issue.rule.name}",
           diagnostics: [diagnostic],
@@ -241,6 +241,13 @@ class AmebaLS::Provider < Larimar::Provider
       action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
     end
     result
+  end
+
+  # A directive ignoring an issue reported on the first line would have to be placed
+  # either above or at the end of it, which in both cases would break a shebang there.
+  private def breaks_shebang?(document, issue) : Bool
+    (issue.location.try(&.line_number) == 1) &&
+      document.to_s.starts_with?("#!")
   end
 
   # `CancellationToken#cancelled!` raises unconditionally.
