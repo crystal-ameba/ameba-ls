@@ -85,7 +85,13 @@ class AmebaLS::Provider < Larimar::Provider
       root: root.to_s,
     ))
 
-    Ameba::Runner.new(config).run
+    begin
+      Ameba::Runner.new(config).run
+    rescue ex
+      # The previous diagnostics are gone already, so they shouldn't stay on the client either.
+      publish_diagnostics(document, [] of LSProtocol::Diagnostic)
+      raise ex
+    end
 
     diagnostics = formatter.diagnostics
     @diagnostics_mutex.synchronize { @diagnostics[document.uri] = diagnostics }
