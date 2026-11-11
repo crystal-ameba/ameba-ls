@@ -217,6 +217,9 @@ class AmebaLS::Provider < Larimar::Provider
 
     return unless (diagnostics = diagnostics_for(document.uri))
 
+    # All of the actions offered for diagnostics are quick fixes.
+    return [] of LSProtocol::CodeAction | LSProtocol::Command unless context.requests?(:quick_fix)
+
     # The preferred fixes come first, followed by the ignores.
     fixes = [] of LSProtocol::CodeAction | LSProtocol::Command
     ignores = [] of LSProtocol::CodeAction | LSProtocol::Command

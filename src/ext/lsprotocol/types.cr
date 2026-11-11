@@ -53,3 +53,32 @@ class LSProtocol::Range
     end
   end
 end
+
+enum LSProtocol::CodeActionKind
+  # Returns the name of the kind used by LSP, which `#to_s` returns
+  # for some of the kinds only.
+  def lsp_name : String
+    case self
+    when .quick_fix? then "quickfix"
+    when .refactor?  then "refactor"
+    when .source?    then "source"
+    when .notebook?  then "notebook"
+    else                  to_s
+    end
+  end
+end
+
+class LSProtocol::CodeActionContext
+  # Returns `true` if actions of the given *kind* were requested.
+  #
+  # Kinds form a hierarchy, so requesting `source` includes `source.fixAll`.
+  def requests?(kind : LSProtocol::CodeActionKind) : Bool
+    return true unless (only = self.only)
+
+    name = kind.lsp_name
+    only.any? do |requested|
+      requested = requested.lsp_name if requested.is_a?(LSProtocol::CodeActionKind)
+      name == requested || name.starts_with?("#{requested}.")
+    end
+  end
+end
