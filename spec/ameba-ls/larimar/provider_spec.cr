@@ -628,6 +628,26 @@ describe AmebaLS::Provider do
 
       apply_edits(document, harness.resolve(action)).should eq("foo <baz>")
     end
+
+    it "applies text inserted after nested edits behind them, like `Corrector#process`" do
+      code = "foo bar"
+      correction = ->(corrector : Ameba::Source::Corrector) {
+        corrector.wrap(0...7, "(", ")")
+        corrector.insert_after(4...7, "!")
+        nil
+      }
+      harness = ProviderHarness.new
+      document = harness.document(code)
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(code, correction: correction)])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      corrector = Ameba::Source::Corrector.new(code)
+      correction.call(corrector)
+      corrector.process.should eq("(foo bar!)")
+
+      apply_edits(document, harness.resolve(action)).should eq(corrector.process)
+    end
   end
 
   describe "Lint/SpecFilename" do

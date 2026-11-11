@@ -332,11 +332,8 @@ class AmebaLS::Provider < Larimar::Provider
     corrector = Ameba::Source::Corrector.new(document.to_s)
     issue.correct(corrector)
 
-    text_edits = [] of LSProtocol::TextEdit
-    get_text_edits(document, text_edits, corrector.@rewriter.@action_root)
-
     workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => text_edits},
+      changes: {document.uri => get_text_edits(document, corrector)},
     )
 
     LSProtocol::CodeAction.new(
@@ -355,43 +352,19 @@ class AmebaLS::Provider < Larimar::Provider
       !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
   end
 
-  private def get_text_edits(document, edits : Array(LSProtocol::TextEdit), action : Ameba::Source::Rewriter::Action) : Nil
-    begin_pos = document.index_to_position(action.begin_pos)
-    end_pos = document.index_to_position(action.end_pos)
-
-    if (insert_before = action.insert_before) && !insert_before.empty?
-      edits << LSProtocol::TextEdit.new(
-        new_text: insert_before,
-        range: LSProtocol::Range.new(
-          start: begin_pos,
-          end: begin_pos,
-        ),
-      )
-    end
-
-    if (replacement = action.replacement)
+  # Clients apply same-position edits in their array order, which here follows
+  # the order `Ameba::Source::Corrector#process` applies them in.
+  private def get_text_edits(document, corrector : Ameba::Source::Corrector) : Array(LSProtocol::TextEdit)
+    edits = [] of LSProtocol::TextEdit
+    corrector.each_replacement do |begin_pos, end_pos, replacement|
       edits << LSProtocol::TextEdit.new(
         new_text: replacement,
         range: LSProtocol::Range.new(
-          start: begin_pos,
-          end: end_pos,
-        ),
-      )
-    else
-      action.@children.each do |child|
-        get_text_edits(document, edits, child)
-      end
-    end
-
-    # Must follow the children, since clients keep the order of same-position inserts.
-    if (insert_after = action.insert_after) && !insert_after.empty?
-      edits << LSProtocol::TextEdit.new(
-        new_text: insert_after,
-        range: LSProtocol::Range.new(
-          start: end_pos,
-          end: end_pos,
+          start: document.index_to_position(begin_pos),
+          end: document.index_to_position(end_pos),
         ),
       )
     end
+    edits
   end
 end
