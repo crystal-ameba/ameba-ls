@@ -38,7 +38,6 @@ class AmebaLS::Provider < Larimar::Provider
 
   private def handle_ameba(document : Larimar::TextDocument, disabled_rules = nil) : Nil
     # Other schemes (`untitled:`, `git:`) have no meaningful path on disk.
-    # For a relative one, `Larimar::Workspace.find_closest_shard_yml` never returns.
     return unless document.uri.scheme == "file"
 
     # Larimar handles each notification in its own fiber, so a change might get
@@ -110,12 +109,16 @@ class AmebaLS::Provider < Larimar::Provider
     false
   end
 
-  # Returns the directory of the closest `shard.yml`, or of the file itself if there's none.
+  # Returns the closest directory containing either a `.ameba.yml` or a `shard.yml`,
+  # the same way Ameba's CLI picks the root, or the directory of the file itself
+  # if there's none.
+  #
+  # Unlike `Larimar::Workspace.find_closest_shard_yml`, it doesn't skip a shard
+  # just because a `../../lib` directory happens to exist next to it, which is
+  # the case for shards placed in e.g. `/app` or `/workspaces/<name>`, since
+  # `/lib` exists on Linux.
   private def project_root(path : Path) : Path
-    # Larimar treats `URI#path` as a file path, in both directions (see `Path#to_uri`),
-    # hence it's neither encoded here, nor decoded in the result.
-    shard_uri = Larimar::Workspace.find_closest_shard_yml(URI.new(scheme: "file", path: path.to_s))
-    shard_uri ? Path[shard_uri.path] : path.parent
+    Ameba::Config.find_root_path(path) || path.parent
   end
 
   # An invalid config shouldn't leave the document without diagnostics, so

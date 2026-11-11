@@ -3,8 +3,6 @@ require "file_utils"
 
 private def with_workspace(ameba_yml = nil, &)
   tmp_dir = Path[File.tempname("ameba-ls-spec")]
-  # Nested, since `Larimar::Workspace.find_closest_shard_yml` skips a `shard.yml`
-  # with an existing `../../lib`, which right within `/tmp` is `/lib` on Linux.
   dir = tmp_dir / "workspace"
   Dir.mkdir_p(dir)
   File.write(dir / "shard.yml", "name: spec\nversion: 0.0.0\n")
@@ -280,6 +278,57 @@ describe AmebaLS::Provider do
 
             harness.rule_names(encoded_uri).should be_empty
           end
+        end
+      end
+
+      it "uses a shard root with an unrelated `lib` directory two levels up" do
+        with_workspace do |uri|
+          # Like `/lib` is for a shard placed in `/app` on Linux.
+          tmp_dir = Path[uri.path].parent.parent
+          Dir.mkdir_p(tmp_dir / "lib")
+          root = tmp_dir / "group" / "app"
+          Dir.mkdir_p(root / "src")
+          File.write(root / "shard.yml", "name: app\nversion: 0.0.0\n")
+          File.write(root / ".ameba.yml", "Lint/DebugCalls:\n  Excluded:\n    - src/subject.cr\n")
+          subject_uri = (root / "src" / "subject.cr").to_uri
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", subject_uri)
+
+          harness.rule_names(subject_uri).should be_empty
+        end
+      end
+
+      it "uses the shard root of a dependency installed into another shard, like Ameba's CLI" do
+        with_workspace("Lint/DebugCalls:\n  Enabled: false\n") do |uri|
+          dependency = Path[uri.path].parent / "lib" / "dependency"
+          Dir.mkdir_p(dependency / "src")
+          File.write(dependency / "shard.yml", "name: dependency\nversion: 0.0.0\n")
+          File.write(dependency / ".ameba.yml", "Lint/DebugCalls:\n  Excluded:\n    - src/excluded.cr\n")
+          subject_uri = (dependency / "src" / "subject.cr").to_uri
+          excluded_uri = (dependency / "src" / "excluded.cr").to_uri
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", subject_uri)
+          harness.open("pp 1\n", excluded_uri)
+
+          # Not excluded by the default `!lib` glob of the shard it's installed into.
+          harness.rule_names(subject_uri).should eq(["Lint/DebugCalls"])
+          harness.rule_names(excluded_uri).should be_empty
+        end
+      end
+
+      it "uses the closest directory with a .ameba.yml as the root, even without a shard.yml" do
+        with_workspace do |uri|
+          root = Path[uri.path].parent / "scripts"
+          Dir.mkdir_p(root / "src")
+          File.write(root / ".ameba.yml", "Lint/DebugCalls:\n  Excluded:\n    - src/subject.cr\n")
+          subject_uri = (root / "src" / "subject.cr").to_uri
+
+          harness = ProviderHarness.new
+          harness.open("pp 1\n", subject_uri)
+
+          harness.rule_names(subject_uri).should be_empty
         end
       end
 
