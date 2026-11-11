@@ -18,6 +18,11 @@ describe LSProtocol::Position do
     (lsp_position(1, 2) > lsp_position(1, 1)).should be_true
     (lsp_position(1, 1) == lsp_position(1, 1)).should be_true
   end
+
+  it "hashes by value, consistently with `#==`" do
+    lsp_position(1, 2).hash.should eq(lsp_position(1, 2).hash)
+    Set{lsp_position(1, 2), lsp_position(1, 2)}.size.should eq(1)
+  end
 end
 
 describe LSProtocol::Range do
@@ -26,6 +31,14 @@ describe LSProtocol::Range do
       (lsp_range(1, 0, 1, 9) == lsp_range(1, 0, 1, 9)).should be_true
       (lsp_range(1, 0, 1, 9) == lsp_range(1, 0, 1, 8)).should be_false
       (lsp_range(1, 0, 1, 9) == lsp_range(0, 0, 1, 9)).should be_false
+    end
+  end
+
+  describe "#hash" do
+    it "hashes by value, consistently with `#==`" do
+      lsp_range(1, 0, 1, 9).hash.should eq(lsp_range(1, 0, 1, 9).hash)
+      Set{lsp_range(1, 0, 1, 9), lsp_range(1, 0, 1, 9)}.size.should eq(1)
+      Set{lsp_range(1, 0, 1, 9), lsp_range(1, 0, 1, 8)}.size.should eq(2)
     end
   end
 

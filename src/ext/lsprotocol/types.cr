@@ -16,11 +16,21 @@ class LSProtocol::Position
   def <=>(other : self)
     {line, character} <=> {other.line, other.character}
   end
+
+  # Consistent with `#==`, which `Comparable` defines by value.
+  def hash(hasher)
+    {line, character}.hash(hasher)
+  end
 end
 
 class LSProtocol::Range
   def ==(other : self)
     start == other.start && self.end == other.end
+  end
+
+  # Consistent with `#==`.
+  def hash(hasher)
+    {start, self.end}.hash(hasher)
   end
 
   def overlaps?(other : self)
