@@ -35,7 +35,9 @@ server = Larimar::Server.new(STDIN, STDOUT)
 backend = Larimar::LogBackend.new(server,
   formatter: Larimar::LogFormatter,
 )
-Log.setup_from_env(backend: backend)
+# Larimar logs every message received and sent at the `info` level, while the backend
+# sends each log entry to the client as yet another message, so it's opt-in.
+Log.setup_from_env(backend: backend, default_level: :warn)
 
 controller = Larimar::ProviderController.new
 controller.register_provider(AmebaLS::Provider.new)

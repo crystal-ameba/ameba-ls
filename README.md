@@ -80,6 +80,10 @@ configure it to use `ameba-ls`:
 }
 ```
 
+### Logging
+
+Warnings and errors are logged to the client by default. Set the `LOG_LEVEL` environment variable of the server (e.g. to `info` or `debug`) for more detailed logs, which include every message exchanged with the client.
+
 ## Contributing
 
 1. Fork it (<https://github.com/crystal-ameba/ameba-ls/fork>)
