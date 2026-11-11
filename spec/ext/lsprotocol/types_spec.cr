@@ -26,6 +26,11 @@ describe LSProtocol::Position do
 end
 
 describe LSProtocol::Range do
+  it "#empty? returns true for a range without characters" do
+    lsp_range(1, 5, 1, 5).empty?.should be_true
+    lsp_range(1, 5, 1, 6).empty?.should be_false
+  end
+
   describe "#==" do
     it "compares by value" do
       (lsp_range(1, 0, 1, 9) == lsp_range(1, 0, 1, 9)).should be_true
@@ -52,9 +57,23 @@ describe LSProtocol::Range do
       lsp_range(2, 0, 3, 0).overlaps?(lsp_range(1, 0, 2, 5)).should be_true
     end
 
-    it "returns true for ranges touching at their boundaries" do
-      lsp_range(1, 0, 1, 5).overlaps?(lsp_range(1, 5, 1, 9)).should be_true
-      lsp_range(1, 5, 1, 9).overlaps?(lsp_range(1, 0, 1, 5)).should be_true
+    it "returns true for a position at the boundaries of the range" do
+      lsp_range(1, 0, 1, 5).overlaps?(lsp_range(1, 5, 1, 5)).should be_true
+      lsp_range(1, 0, 1, 5).overlaps?(lsp_range(1, 0, 1, 0)).should be_true
+      lsp_range(1, 5, 1, 5).overlaps?(lsp_range(1, 0, 1, 5)).should be_true
+    end
+
+    it "returns true for an empty range at the boundary of another empty one" do
+      lsp_range(1, 5, 1, 5).overlaps?(lsp_range(1, 5, 1, 5)).should be_true
+    end
+
+    it "returns false for ranges only touching at their boundaries, since their ends are exclusive" do
+      lsp_range(1, 0, 1, 5).overlaps?(lsp_range(1, 5, 1, 9)).should be_false
+      lsp_range(1, 5, 1, 9).overlaps?(lsp_range(1, 0, 1, 5)).should be_false
+    end
+
+    it "returns false for a selection of whole lines, ending where the next one starts" do
+      lsp_range(0, 0, 1, 0).overlaps?(lsp_range(1, 0, 1, 4)).should be_false
     end
 
     it "returns false for disjoint ranges" do
