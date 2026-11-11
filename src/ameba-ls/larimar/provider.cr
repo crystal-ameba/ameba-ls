@@ -41,6 +41,11 @@ class AmebaLS::Provider < Larimar::Provider
     # For a relative one, `Larimar::Workspace.find_closest_shard_yml` never returns.
     return unless document.uri.scheme == "file"
 
+    # Larimar handles each notification in its own fiber, so a change might get
+    # handled after the document has been closed, while waiting for its lock.
+    # Its diagnostics would then never get cleared.
+    return unless open?(document)
+
     # Whatever happens below, the previous issues no longer match the document.
     @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
@@ -86,6 +91,11 @@ class AmebaLS::Provider < Larimar::Provider
     @diagnostics_mutex.synchronize { @diagnostics[document.uri] = diagnostics }
 
     publish_diagnostics(document, diagnostics)
+  end
+
+  # Returns `true` unless *document* has been closed (or reopened as another document) since.
+  private def open?(document : Larimar::TextDocument) : Bool
+    controller.@documents[document.uri]?.same?(document)
   end
 
   # Globs are validated upfront, yet `File.match?` still raises once
