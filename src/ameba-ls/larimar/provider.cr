@@ -239,7 +239,8 @@ class AmebaLS::Provider < Larimar::Provider
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (version = data["version"]?.try(&.as_i?))
 
-    document.mutex.synchronize do
+    # Only reads the document, so it doesn't block other readers.
+    document.mutex.read do
       # The document has changed since the action was offered,
       # hence the issue it was offered for might not be there anymore.
       next unless version == document.version
