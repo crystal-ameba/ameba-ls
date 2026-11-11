@@ -570,6 +570,26 @@ describe AmebaLS::Provider do
       harness.provider.resolve_code_action(action, nil).should be_nil
     end
 
+    it "isn't blocked by other readers of the document" do
+      harness = ProviderHarness.new
+      document = harness.open("foo = 1   \nputs foo\n")
+      action = harness.actions(document, lsp_range(0, 7, 0, 7)).first
+
+      resolved = Channel(LSProtocol::CodeAction?).new
+      document.mutex.read do
+        spawn do
+          resolved.send(harness.provider.resolve_code_action(action, nil))
+        end
+
+        select
+        when result = resolved.receive
+          result.should_not be_nil
+        when timeout(1.second)
+          fail "Blocked by a reader of the document"
+        end
+      end
+    end
+
     it "resolves actions after a JSON round trip, as received from a client" do
       harness = ProviderHarness.new
       document = harness.open("foo = 1   \nbar = 2  \nputs foo, bar\n")
