@@ -221,6 +221,9 @@ class AmebaLS::Provider < Larimar::Provider
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
+    # A single directive ignores all of the issues of a rule within a line.
+    ignored = Set({String, Int32?}).new
+
     diagnostics.each do |diagnostic|
       issue, diagnostic =
         diagnostic.issue, diagnostic.diagnostic
@@ -240,7 +243,7 @@ class AmebaLS::Provider < Larimar::Provider
         )
       end
 
-      unless issue.rule.special? || breaks_shebang?(document, issue)
+      if ignorable?(document, issue, ignored)
         result << LSProtocol::CodeAction.new(
           title: "Ignore #{issue.rule.name}",
           diagnostics: [diagnostic],
@@ -258,6 +261,21 @@ class AmebaLS::Provider < Larimar::Provider
       action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
     end
     result
+  end
+
+  # `Lint/SpecFilename` renames the file on disk from within its correction block,
+  # instead of scheduling an edit, so it must never run while resolving a code action.
+  private def fixable?(issue : Ameba::Issue) : Bool
+    issue.correctable? &&
+      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
+  end
+
+  # Returns `true` if an action ignoring the *issue* should be offered,
+  # recording its rule and line in *ignored*, so it's offered once per line.
+  private def ignorable?(document, issue, ignored) : Bool
+    !issue.rule.special? &&
+      !breaks_shebang?(document, issue) &&
+      ignored.add?({issue.rule.name, issue.location.try(&.line_number)})
   end
 
   # A directive ignoring an issue reported on the first line would have to be placed
@@ -390,13 +408,6 @@ class AmebaLS::Provider < Larimar::Provider
       kind: :quick_fix,
       is_preferred: true,
     )
-  end
-
-  # `Lint/SpecFilename` renames the file on disk from within its correction block,
-  # instead of scheduling an edit, so it must never run while resolving a code action.
-  private def fixable?(issue : Ameba::Issue) : Bool
-    issue.correctable? &&
-      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
   end
 
   # Clients apply same-position edits in their array order, which here follows

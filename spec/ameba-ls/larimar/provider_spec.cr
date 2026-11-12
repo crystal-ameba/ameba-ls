@@ -554,6 +554,17 @@ describe AmebaLS::Provider do
         .should eq([1])
     end
 
+    it "offers to ignore a rule once per line" do
+      harness = ProviderHarness.new
+      document = harness.open("a = 1; b = 2\nc = 3\n")
+
+      action_titles(harness.actions(document, lsp_range(0, 0, 1, 5)))
+        .should eq(["Ignore Lint/UselessAssign", "Ignore Lint/UselessAssign"])
+      harness.actions(document, lsp_range(0, 0, 1, 5))
+        .compact_map(&.diagnostics.try(&.first.range.start.line))
+        .should eq([0, 1])
+    end
+
     it "doesn't offer to ignore special rules" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
