@@ -15,6 +15,21 @@ ensure
   FileUtils.rm_rf(tmp_dir.to_s) if tmp_dir
 end
 
+# Disabled by default, since rules are collected from all of the subclasses of `Ameba::Rule::Base`.
+module Ameba::Rule::AmebaLSSpec
+  class Raising < Base
+    properties do
+      since_version("1.0.0")
+      description("Raises on every source, for the specs of failed runs")
+      enabled(false)
+    end
+
+    def test(source)
+      raise "Raising rule"
+    end
+  end
+end
+
 private def published_codes(harness)
   harness.published.last["params"]["diagnostics"].as_a.map(&.["code"].as_s)
 end
@@ -172,6 +187,21 @@ describe AmebaLS::Provider do
 
       harness.published.size.should eq(published_count)
       harness.rule_names.should be_empty
+    end
+
+    it "clears the diagnostics on the client when analysing the document fails" do
+      with_workspace("AmebaLSSpec/Raising:\n  Enabled: true\n") do |uri|
+        harness = ProviderHarness.new
+        document = harness.document("pp 1\n", uri)
+        harness.stub_diagnostics(uri, [stub_diagnostic])
+
+        expect_raises(Exception, "Raising rule") do
+          harness.provider.on_change(document)
+        end
+
+        harness.published.last["params"]["diagnostics"].as_a.should be_empty
+        harness.provider.@diagnostics[uri]?.should be_nil
+      end
     end
 
     describe "configuration" do
