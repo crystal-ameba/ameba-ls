@@ -28,6 +28,22 @@ module Ameba::Rule::AmebaLSSpec
   end
 end
 
+private def initialize_client(harness, capabilities)
+  harness.controller.on_init(LSProtocol::InitializeParams.from_json({
+    processId:    nil,
+    rootUri:      nil,
+    capabilities: capabilities,
+  }.to_json))
+end
+
+private def watched_files_notification(*uris)
+  LSProtocol::DidChangeWatchedFilesNotification.from_json({
+    jsonrpc: "2.0",
+    method:  "workspace/didChangeWatchedFiles",
+    params:  {changes: uris.map { |uri| {uri: uri.to_s, type: 2} }},
+  }.to_json)
+end
+
 private def published_codes(harness)
   harness.published.last["params"]["diagnostics"].as_a.map(&.["code"].as_s)
 end
@@ -358,6 +374,77 @@ describe AmebaLS::Provider do
 
           harness.rule_names(uri).should eq(["Lint/DebugCalls"])
         end
+      end
+    end
+  end
+
+  describe "config watching" do
+    it "asks the client to watch config files, if it's able to register watchers" do
+      harness = ProviderHarness.new
+      initialize_client(harness, {workspace: {didChangeWatchedFiles: {dynamicRegistration: true}}})
+
+      harness.provider.when_ready
+
+      request = harness.published.last
+      request["method"].should eq("client/registerCapability")
+      registration = request["params"]["registrations"][0]
+      registration["method"].should eq("workspace/didChangeWatchedFiles")
+      registration["registerOptions"]["watchers"][0]["globPattern"].should eq("**/.ameba.yml")
+    end
+
+    it "doesn't ask a client unable to register watchers" do
+      harness = ProviderHarness.new
+      initialize_client(harness, {workspace: {didChangeWatchedFiles: {dynamicRegistration: false}}})
+
+      harness.provider.when_ready
+
+      harness.published.should be_empty
+    end
+
+    it "analyses the open documents again once a config file changes" do
+      with_workspace do |uri|
+        harness = ProviderHarness.new
+        harness.open("pp 1\n", uri)
+        harness.rule_names(uri).should eq(["Lint/DebugCalls"])
+
+        config_path = Path[uri.path].parent / ".ameba.yml"
+        File.write(config_path, "Lint/DebugCalls:\n  Enabled: false\n")
+        harness.controller.on_notification(watched_files_notification(config_path.to_uri))
+
+        harness.rule_names(uri).should be_empty
+        published_codes(harness).should be_empty
+      end
+    end
+
+    it "analyses the rest of the open documents once one of them fails" do
+      with_workspace do |uri|
+        failing_root = Path[uri.path].parent / "failing"
+        Dir.mkdir_p(failing_root)
+        File.write(failing_root / ".ameba.yml", "AmebaLSSpec/Raising:\n  Enabled: true\n")
+
+        harness = ProviderHarness.new
+        # Registered first, so it gets analysed first.
+        harness.document("pp 1\n", (failing_root / "subject.cr").to_uri)
+        harness.open("pp 1\n", uri)
+        harness.rule_names(uri).should eq(["Lint/DebugCalls"])
+
+        config_path = Path[uri.path].parent / ".ameba.yml"
+        File.write(config_path, "Lint/DebugCalls:\n  Enabled: false\n")
+        harness.controller.on_notification(watched_files_notification(config_path.to_uri))
+
+        harness.rule_names(uri).should be_empty
+      end
+    end
+
+    it "ignores changes of other files" do
+      with_workspace do |uri|
+        harness = ProviderHarness.new
+        harness.open("pp 1\n", uri)
+        published_count = harness.published.size
+
+        harness.controller.on_notification(watched_files_notification((Path[uri.path].parent / "shard.yml").to_uri))
+
+        harness.published.size.should eq(published_count)
       end
     end
   end
