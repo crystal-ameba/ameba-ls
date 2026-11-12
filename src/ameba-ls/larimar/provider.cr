@@ -31,8 +31,9 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   def on_close(document : Larimar::TextDocument) : Nil
-    @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
-
+    @diagnostics_mutex.synchronize do
+      @diagnostics.delete(document.uri)
+    end
     publish_empty_diagnostics(document)
   end
 
@@ -46,7 +47,9 @@ class AmebaLS::Provider < Larimar::Provider
     return unless open?(document)
 
     # Whatever happens below, the previous issues no longer match the document.
-    @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
+    @diagnostics_mutex.synchronize do
+      @diagnostics.delete(document.uri)
+    end
 
     document_path = Path[URI.decode(document.uri.path)]
     root = project_root(document_path)
@@ -93,7 +96,9 @@ class AmebaLS::Provider < Larimar::Provider
     end
 
     diagnostics = formatter.diagnostics
-    @diagnostics_mutex.synchronize { @diagnostics[document.uri] = diagnostics }
+    @diagnostics_mutex.synchronize do
+      @diagnostics[document.uri] = diagnostics
+    end
 
     publish_diagnostics(document, diagnostics)
   end
@@ -141,7 +146,10 @@ class AmebaLS::Provider < Larimar::Provider
           @config_errors.delete(root)
         end
       else
-        report_config_error(root, errors.join("; ") { |ex| ex.message || ex.class.name })
+        message = errors.join("; ") do |ex|
+          ex.message || ex.class.name
+        end
+        report_config_error(root, message)
       end
     end
   rescue ex
@@ -152,7 +160,9 @@ class AmebaLS::Provider < Larimar::Provider
   # Called on every change, so the same error is reported only once.
   private def report_config_error(root : Path, message : String) : Nil
     already_reported = @config_errors_mutex.synchronize do
-      prev_message = @config_errors[root]?.tap { @config_errors[root] = message }
+      prev_message = @config_errors[root]?.tap do
+        @config_errors[root] = message
+      end
       prev_message == message
     end
     return if already_reported
@@ -204,7 +214,10 @@ class AmebaLS::Provider < Larimar::Provider
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
     raise_if_cancelled(token)
 
-    return unless (diagnostics = @diagnostics_mutex.synchronize { @diagnostics[document.uri]? })
+    diagnostics = @diagnostics_mutex.synchronize do
+      @diagnostics[document.uri]?
+    end
+    return unless diagnostics
 
     result = [] of LSProtocol::CodeAction | LSProtocol::Command
 
