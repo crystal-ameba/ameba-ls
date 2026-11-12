@@ -54,6 +54,10 @@ class ProviderHarness
       .map(&.as(LSProtocol::CodeAction))
   end
 
+  def fix_all_action(document, range = far_away_range)
+    actions(document, range).find!(&.kind.==(LSProtocol::CodeActionKind::SourceFixAll))
+  end
+
   def resolve(action)
     provider.resolve_code_action(action, nil).should_not(be_nil)
   end

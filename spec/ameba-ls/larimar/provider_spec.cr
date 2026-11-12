@@ -563,7 +563,7 @@ describe AmebaLS::Provider do
       ])
 
       action_titles(harness.actions(document, lsp_range(0, 0, 0, 0)))
-        .should eq(["Fix Lint/UnneededDisableDirective"])
+        .should eq(["Fix Lint/UnneededDisableDirective", "Fix all auto-correctable issues"])
     end
 
     it "offers nothing for a real syntax error" do
@@ -853,6 +853,21 @@ describe AmebaLS::Provider do
         File.exists?(path.sibling("foo_spec.cr")).should be_false
       end
     end
+
+    it "is left out of the fix all action" do
+      with_spec_file do |uri, path|
+        harness = ProviderHarness.new
+        document = harness.open("puts 1   \n", uri)
+        harness.rule_names(uri).should contain("Lint/SpecFilename")
+
+        resolved = harness.resolve(harness.fix_all_action(document))
+        resolved.diagnostics.should_not(be_nil).map(&.code).should_not contain("Lint/SpecFilename")
+        apply_edits(document, resolved).should eq("puts 1\n")
+
+        File.exists?(path).should be_true
+        File.exists?(path.sibling("foo_spec.cr")).should be_false
+      end
+    end
   end
 
   describe "ignore action" do
@@ -958,6 +973,126 @@ describe AmebaLS::Provider do
 
       apply_edits(document, harness.resolve(action))
         .should contain("# ameba:disable Layout/TrailingBlankLines\n")
+    end
+  end
+
+  describe "fix all action" do
+    it "corrects every correctable issue, regardless of the requested range" do
+      code = "foo bar"
+      harness = ProviderHarness.new
+      document = harness.document(code)
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(code, correction: ->(corrector : Ameba::Source::Corrector) {
+          corrector.replace(0...3, "FOO")
+          nil
+        }),
+        stub_diagnostic(code, correction: ->(corrector : Ameba::Source::Corrector) {
+          corrector.replace(4...7, "BAR")
+          nil
+        }),
+      ])
+
+      action = harness.fix_all_action(document)
+      action.edit.should be_nil
+      action.is_preferred.should be_falsey
+
+      resolved = harness.resolve(action)
+
+      resolved.title.should eq(action.title)
+      resolved.kind.should eq(LSProtocol::CodeActionKind::SourceFixAll)
+      resolved.diagnostics.should_not(be_nil).size.should eq(2)
+      apply_edits(document, resolved).should eq("FOO BAR")
+    end
+
+    it "corrects real issues" do
+      harness = ProviderHarness.new
+      document = harness.open("foo = 1   \nbar = 2  \nputs foo, bar\n")
+
+      apply_edits(document, harness.resolve(harness.fix_all_action(document)))
+        .should eq("foo = 1\nbar = 2\nputs foo, bar\n")
+    end
+
+    it "is listed after the actions of individual issues" do
+      harness = ProviderHarness.new
+      document = harness.open("foo = 1   \nbar = 2  \nputs foo, bar\n")
+
+      harness.actions(document, lsp_range(0, 0, 9, 0)).last.kind
+        .should eq(LSProtocol::CodeActionKind::SourceFixAll)
+    end
+
+    it "serializes with the source.fixAll kind" do
+      harness = ProviderHarness.new
+      document = harness.open("foo = 1   \nbar = 2  \nputs foo, bar\n")
+
+      JSON.parse(harness.fix_all_action(document).to_json)["kind"].should eq("source.fixAll")
+    end
+
+    it "isn't offered when nothing can be corrected" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic, stub_diagnostic])
+
+      harness.actions(document).should be_empty
+    end
+
+    it "is offered for a single correctable issue" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(correction: noop_correction),
+        stub_diagnostic,
+      ])
+
+      harness.resolve(harness.fix_all_action(document))
+        .diagnostics.should_not(be_nil).size.should eq(1)
+    end
+
+    it "leaves out issues that can't be corrected" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(correction: noop_correction),
+        stub_diagnostic,
+        stub_diagnostic(correction: noop_correction),
+      ])
+
+      harness.resolve(harness.fix_all_action(document))
+        .diagnostics.should_not(be_nil).size.should eq(2)
+    end
+
+    it "preserves the order of nested wraps ending at the same position" do
+      code = "foo bar"
+      harness = ProviderHarness.new
+      document = harness.document(code)
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(code, correction: ->(corrector : Ameba::Source::Corrector) {
+          corrector.wrap(0...7, "(", ")")
+          nil
+        }),
+        stub_diagnostic(code, correction: ->(corrector : Ameba::Source::Corrector) {
+          corrector.wrap(4...7, "[", "]")
+          nil
+        }),
+      ])
+
+      apply_edits(document, harness.resolve(harness.fix_all_action(document)))
+        .should eq("(foo [bar])")
+    end
+
+    # Documents current behaviour: `Lint/Formatting` replaces the whole file,
+    # which swallows any other correction made in the same pass.
+    it "leaves corrections swallowed by a whole file replacement for the next pass" do
+      harness = ProviderHarness.new
+      document = harness.open("unless a\nb\nelse\nc\nend\n")
+      harness.rule_names.should contain("Lint/Formatting")
+      harness.rule_names.should contain("Style/UnlessElse")
+
+      corrected = apply_edits(document, harness.resolve(harness.fix_all_action(document)))
+      corrected.should eq("unless a\n  b\nelse\n  c\nend\n")
+
+      document.update_whole(corrected)
+      harness.provider.on_save(document)
+      harness.rule_names.should eq(["Style/UnlessElse"])
     end
   end
 

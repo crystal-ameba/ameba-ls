@@ -257,6 +257,20 @@ class AmebaLS::Provider < Larimar::Provider
     result.sort_by! do |action|
       action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
     end
+
+    # Applies to the whole file, so it's offered regardless of the requested range.
+    if diagnostics.any? { |entry| fixable?(entry.issue) }
+      result << LSProtocol::CodeAction.new(
+        title: "Fix all auto-correctable issues",
+        kind: :source_fix_all,
+        data: JSON::Any.new({
+          "uri"     => JSON::Any.new(document.uri.to_s),
+          "version" => JSON::Any.new(document.version),
+          "fix_all" => JSON::Any.new(true),
+        } of String => JSON::Any),
+      )
+    end
+
     result
   end
 
@@ -282,15 +296,20 @@ class AmebaLS::Provider < Larimar::Provider
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
                   (document_uri = URI.parse(document_uri_string)) &&
                   (document = controller.@documents[document_uri]?) &&
-                  (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (version = data["version"]?.try(&.as_i?))
 
     # Only reads the document, so it doesn't block other readers.
     document.mutex.read do
       # The document has changed since the action was offered,
-      # hence the issue it was offered for might not be there anymore.
+      # hence the issues it was offered for might not be there anymore.
       next unless version == document.version
       next unless (diagnostics = @diagnostics_mutex.synchronize { @diagnostics[document_uri]? })
+
+      if data["fix_all"]?.try(&.as_bool?)
+        next resolve_fix_all_code_action(document, diagnostics)
+      end
+
+      next unless (diagnostic = code_action.diagnostics.try(&.first?))
       next unless (issue = diagnostics.find(&.matches?(diagnostic)).try(&.issue))
 
       if data["ignore"]?.try(&.as_bool?)
@@ -376,19 +395,32 @@ class AmebaLS::Provider < Larimar::Provider
   private def resolve_fix_code_action(document, diagnostic, issue)
     return unless fixable?(issue)
 
-    corrector = Ameba::Source::Corrector.new(document.to_s)
-    issue.correct(corrector)
-
-    workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => get_text_edits(document, corrector)},
-    )
-
     LSProtocol::CodeAction.new(
       title: "Fix #{issue.rule.name}",
       diagnostics: [diagnostic],
-      edit: workspace_edit,
+      edit: correction_edit(document, {issue}),
       kind: :quick_fix,
       is_preferred: true,
+    )
+  end
+
+  private def resolve_fix_all_code_action(document, diagnostics)
+    fixable = diagnostics.select { |entry| fixable?(entry.issue) }
+
+    LSProtocol::CodeAction.new(
+      title: "Fix all auto-correctable issues",
+      diagnostics: fixable.map(&.diagnostic),
+      edit: correction_edit(document, fixable.map(&.issue)),
+      kind: :source_fix_all,
+    )
+  end
+
+  private def correction_edit(document, issues : Enumerable(Ameba::Issue)) : LSProtocol::WorkspaceEdit
+    corrector = Ameba::Source::Corrector.new(document.to_s)
+    issues.each(&.correct(corrector))
+
+    LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => get_text_edits(document, corrector)},
     )
   end
 
