@@ -263,6 +263,13 @@ class AmebaLS::Provider < Larimar::Provider
     result
   end
 
+  # `Lint/SpecFilename` renames the file on disk from within its correction block,
+  # instead of scheduling an edit, so it must never run while resolving a code action.
+  private def fixable?(issue : Ameba::Issue) : Bool
+    issue.correctable? &&
+      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
+  end
+
   # Returns `true` if an action ignoring the *issue* should be offered,
   # recording its rule and line in *ignored*, so it's offered once per line.
   private def ignorable?(document, issue, ignored) : Bool
@@ -401,13 +408,6 @@ class AmebaLS::Provider < Larimar::Provider
       kind: :quick_fix,
       is_preferred: true,
     )
-  end
-
-  # `Lint/SpecFilename` renames the file on disk from within its correction block,
-  # instead of scheduling an edit, so it must never run while resolving a code action.
-  private def fixable?(issue : Ameba::Issue) : Bool
-    issue.correctable? &&
-      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
   end
 
   # Clients apply same-position edits in their array order, which here follows
