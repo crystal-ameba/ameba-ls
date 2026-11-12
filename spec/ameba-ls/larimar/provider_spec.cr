@@ -488,6 +488,18 @@ describe AmebaLS::Provider do
         .should eq(["Ignore Style/UnlessElse"])
     end
 
+    it "doesn't offer the actions of the line following a selection of whole lines" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\nbar\n")
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(rule: Ameba::Rule::Lint::DebugCalls.new, line: 1),
+        stub_diagnostic(rule: Ameba::Rule::Style::UnlessElse.new, line: 2),
+      ])
+
+      action_titles(harness.actions(document, lsp_range(0, 0, 1, 0)))
+        .should eq(["Ignore Lint/DebugCalls"])
+    end
+
     it "accepts a selection range" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
