@@ -541,6 +541,19 @@ describe AmebaLS::Provider do
       action_titles(actions).should contain("Ignore Lint/DebugCalls")
     end
 
+    it "doesn't offer to ignore issues on the first line of a script with a shebang" do
+      harness = ProviderHarness.new
+      document = harness.document("#!/usr/bin/env crystal\nfoo\n")
+      harness.stub_diagnostics(document.uri, [
+        stub_diagnostic(line: 1),
+        stub_diagnostic(line: 2),
+      ])
+
+      harness.actions(document, lsp_range(0, 0, 1, 3))
+        .compact_map(&.diagnostics.try(&.first.range.start.line))
+        .should eq([1])
+    end
+
     it "doesn't offer to ignore special rules" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
