@@ -33,7 +33,7 @@ class AmebaLS::Provider < Larimar::Provider
   def on_close(document : Larimar::TextDocument) : Nil
     @diagnostics_mutex.synchronize { @diagnostics.delete(document.uri) }
 
-    publish_diagnostics(document, [] of LSProtocol::Diagnostic)
+    publish_empty_diagnostics(document)
   end
 
   private def handle_ameba(document : Larimar::TextDocument, disabled_rules = nil) : Nil
@@ -57,7 +57,7 @@ class AmebaLS::Provider < Larimar::Provider
         source: document_path.to_s,
         root: root.to_s,
       ))
-      publish_diagnostics(document, [] of LSProtocol::Diagnostic)
+      publish_empty_diagnostics(document)
       return
     end
 
@@ -88,7 +88,7 @@ class AmebaLS::Provider < Larimar::Provider
       Ameba::Runner.new(config).run
     rescue ex
       # The previous diagnostics are gone already, so they shouldn't stay on the client either.
-      publish_diagnostics(document, [] of LSProtocol::Diagnostic)
+      publish_empty_diagnostics(document)
       raise ex
     end
 
@@ -190,6 +190,10 @@ class AmebaLS::Provider < Larimar::Provider
 
   private def publish_diagnostics(document, diagnostics : Array(IssueDiagnostic)) : Nil
     publish_diagnostics(document, diagnostics.map(&.diagnostic))
+  end
+
+  private def publish_empty_diagnostics(document) : Nil
+    publish_diagnostics(document, [] of LSProtocol::Diagnostic)
   end
 
   def provide_code_actions(
