@@ -41,9 +41,10 @@ class AmebaLS::Provider < Larimar::Provider
     # Other schemes (`untitled:`, `git:`) have no meaningful path on disk.
     return unless document.uri.scheme == "file"
 
-    # Larimar handles each notification in its own fiber, so a change might get
-    # handled after the document has been closed, while waiting for its lock.
-    # Its diagnostics would then never get cleared.
+    # Larimar handles each notification in its own fiber, and while it skips changes
+    # and saves of documents closed in the meantime, it doesn't do so for opens:
+    # `didOpen` registers the document before taking its lock, so a `didClose`
+    # might take it first. Its diagnostics would then never get cleared.
     return unless open?(document)
 
     # Whatever happens below, the previous issues no longer match the document.
@@ -105,7 +106,7 @@ class AmebaLS::Provider < Larimar::Provider
 
   # Returns `true` unless *document* has been closed (or reopened as another document) since.
   private def open?(document : Larimar::TextDocument) : Bool
-    controller.@documents[document.uri]?.same?(document)
+    controller.document?(document.uri).same?(document)
   end
 
   # Globs are validated upfront, yet `File.match?` still raises once
@@ -124,10 +125,9 @@ class AmebaLS::Provider < Larimar::Provider
   # the same way Ameba's CLI picks the root, or the directory of the file itself
   # if there's none.
   #
-  # Unlike `Larimar::Workspace.find_closest_shard_yml`, it doesn't skip a shard
-  # just because a `../../lib` directory happens to exist next to it, which is
-  # the case for shards placed in e.g. `/app` or `/workspaces/<name>`, since
-  # `/lib` exists on Linux.
+  # Unlike `Larimar::Workspace.find_closest_shard_yml`, it also stops at a directory
+  # containing only a `.ameba.yml`, and doesn't skip shards installed into the `lib`
+  # folder of another one, so these are linted against their own root and config.
   private def project_root(path : Path) : Path
     Ameba::Config.find_root_path(path) || path.parent
   end
@@ -299,7 +299,7 @@ class AmebaLS::Provider < Larimar::Provider
     return unless (data = code_action.data.try(&.as_h?)) &&
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
                   (document_uri = URI.parse(document_uri_string)) &&
-                  (document = controller.@documents[document_uri]?) &&
+                  (document = controller.document?(document_uri)) &&
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (version = data["version"]?.try(&.as_i?))
 

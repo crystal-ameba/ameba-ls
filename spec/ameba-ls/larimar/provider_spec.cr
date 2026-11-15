@@ -164,9 +164,7 @@ describe AmebaLS::Provider do
       harness = ProviderHarness.new
       document = harness.open("pp 1\n")
 
-      # The way `Larimar::ProviderController` closes it.
-      harness.controller.@documents.delete(document.uri)
-      harness.provider.on_close(document)
+      harness.close(document)
 
       harness.provider.on_change(document)
 

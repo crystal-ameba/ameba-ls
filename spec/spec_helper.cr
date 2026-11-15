@@ -43,6 +43,17 @@ class ProviderHarness
     document(code, uri).tap { |document| provider.on_open(document) }
   end
 
+  # Closes *document* the way a client does, through `Larimar::ProviderController`.
+  def close(document)
+    controller.on_notification(
+      LSProtocol::DidCloseTextDocumentNotification.new(
+        params: LSProtocol::DidCloseTextDocumentParams.new(
+          text_document: LSProtocol::TextDocumentIdentifier.new(uri: document.uri),
+        ),
+      )
+    )
+  end
+
   def stub_diagnostics(uri, diagnostics : Array(AmebaLS::IssueDiagnostic))
     provider.@diagnostics[uri] = diagnostics
   end
