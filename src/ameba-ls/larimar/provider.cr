@@ -212,7 +212,7 @@ class AmebaLS::Provider < Larimar::Provider
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
-    raise_if_cancelled(token)
+    token.try(&.cancelled!)
 
     diagnostics = @diagnostics_mutex.synchronize do
       @diagnostics[document.uri]?
@@ -285,16 +285,11 @@ class AmebaLS::Provider < Larimar::Provider
       document.to_s.starts_with?("#!")
   end
 
-  # `CancellationToken#cancelled!` raises unconditionally.
-  private def raise_if_cancelled(token : CancellationToken?) : Nil
-    raise CancellationException.new if token.try(&.cancelled?)
-  end
-
   def resolve_code_action(
     code_action : LSProtocol::CodeAction,
     token : CancellationToken?,
   ) : LSProtocol::CodeAction?
-    raise_if_cancelled(token)
+    token.try(&.cancelled!)
 
     return unless (data = code_action.data.try(&.as_h?)) &&
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
