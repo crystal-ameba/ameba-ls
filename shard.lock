@@ -6,15 +6,11 @@ shards:
 
   larimar:
     git: https://github.com/nobodywasishere/larimar.git
-    version: 0.1.0+git.commit.51ef0f1dda6a65b5fe8fc608b1ffa57aea2dc063
+    version: 0.1.0+git.commit.beca92ed17f10b1a0420eadeb92d121ee592f21b
 
   lsprotocol:
     git: https://github.com/nobodywasishere/lsprotocol-crystal.git
     version: 0.1.0+git.commit.28986890c7657af4aefea8355ca3f3c7fc2bc9dd
-
-  rwlock:
-    git: https://github.com/spider-gazelle/readers-writer.git
-    version: 1.0.7
 
   tree_sitter:
     git: https://github.com/crystal-lang-tools/crystal-tree-sitter.git
