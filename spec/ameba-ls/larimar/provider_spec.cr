@@ -160,31 +160,6 @@ describe AmebaLS::Provider do
         .should be_nil
     end
 
-    it "ignores a change handled after the document got closed" do
-      harness = ProviderHarness.new
-      document = harness.open("pp 1\n")
-
-      harness.close(document)
-
-      harness.provider.on_change(document)
-
-      harness.published.last["params"]["diagnostics"].as_a.should be_empty
-      harness.provider.@diagnostics[document.uri]?.should be_nil
-    end
-
-    it "ignores a change to a document that got reopened since" do
-      harness = ProviderHarness.new
-      document = harness.open("pp 1\n")
-      harness.provider.on_close(document)
-      harness.open("puts 1\n")
-      published_count = harness.published.size
-
-      harness.provider.on_change(document)
-
-      harness.published.size.should eq(published_count)
-      harness.rule_names.should be_empty
-    end
-
     it "clears the diagnostics on the client when analysing the document fails" do
       with_workspace("AmebaLSSpec/Raising:\n  Enabled: true\n") do |uri|
         harness = ProviderHarness.new

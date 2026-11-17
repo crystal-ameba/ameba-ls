@@ -41,12 +41,6 @@ class AmebaLS::Provider < Larimar::Provider
     # Other schemes (`untitled:`, `git:`) have no meaningful path on disk.
     return unless document.uri.scheme == "file"
 
-    # Larimar handles each notification in its own fiber, and while it skips changes
-    # and saves of documents closed in the meantime, it doesn't do so for opens:
-    # `didOpen` registers the document before taking its lock, so a `didClose`
-    # might take it first. Its diagnostics would then never get cleared.
-    return unless open?(document)
-
     # Whatever happens below, the previous issues no longer match the document.
     @diagnostics_mutex.synchronize do
       @diagnostics.delete(document.uri)
@@ -102,11 +96,6 @@ class AmebaLS::Provider < Larimar::Provider
     end
 
     publish_diagnostics(document, diagnostics)
-  end
-
-  # Returns `true` unless *document* has been closed (or reopened as another document) since.
-  private def open?(document : Larimar::TextDocument) : Bool
-    controller.document?(document.uri).same?(document)
   end
 
   # Globs are validated upfront, yet `File.match?` still raises once
