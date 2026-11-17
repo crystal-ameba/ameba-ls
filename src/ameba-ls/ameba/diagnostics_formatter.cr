@@ -22,7 +22,14 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
 
   getter diagnostics = Array(IssueDiagnostic).new
 
+  # The encoding of the character offsets in the ranges of the diagnostics
+  getter position_encoding : LSProtocol::PositionEncodingKind
+
   @mutex = Mutex.new
+
+  def initialize(@position_encoding = :utf8)
+    super()
+  end
 
   def source_finished(source : Ameba::Source) : Nil
     diagnostics = [] of IssueDiagnostic
@@ -42,7 +49,7 @@ class AmebaLS::DiagnosticsFormatter < Ameba::Formatter::BaseFormatter
             href: URI.parse(issue.rule.class.documentation_url),
           ),
           message: issue.message,
-          range: issue.lsp_location_range,
+          range: issue.lsp_location_range(source.lines, position_encoding),
           severity: convert_severity(issue.rule.severity),
           tags: tags,
           source: "ameba",

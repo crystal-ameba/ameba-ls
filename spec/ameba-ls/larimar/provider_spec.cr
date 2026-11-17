@@ -160,29 +160,20 @@ describe AmebaLS::Provider do
         .should be_nil
     end
 
-    it "ignores a change handled after the document got closed" do
-      harness = ProviderHarness.new
-      document = harness.open("pp 1\n")
+    {
+      LSProtocol::PositionEncodingKind::Utf8  => 7,
+      LSProtocol::PositionEncodingKind::Utf16 => 4,
+      LSProtocol::PositionEncodingKind::Utf32 => 3,
+    }.each do |encoding, character|
+      it "expresses the ranges in the #{encoding} code units negotiated with the client" do
+        harness = ProviderHarness.new
+        harness.open(%({"ź😀", pp 1}\n), position_encoding: encoding)
 
-      harness.close(document)
-
-      harness.provider.on_change(document)
-
-      harness.published.last["params"]["diagnostics"].as_a.should be_empty
-      harness.provider.@diagnostics[document.uri]?.should be_nil
-    end
-
-    it "ignores a change to a document that got reopened since" do
-      harness = ProviderHarness.new
-      document = harness.open("pp 1\n")
-      harness.provider.on_close(document)
-      harness.open("puts 1\n")
-      published_count = harness.published.size
-
-      harness.provider.on_change(document)
-
-      harness.published.size.should eq(published_count)
-      harness.rule_names.should be_empty
+        diagnostic = harness.provider.@diagnostics[SPEC_URI]
+          .find!(&.issue.rule.name.==("Lint/DebugCalls"))
+          .diagnostic
+        diagnostic.range.start.to_json.should eq(lsp_position(0, character + 4).to_json)
+      end
     end
 
     it "clears the diagnostics on the client when analysing the document fails" do
@@ -912,6 +903,19 @@ describe AmebaLS::Provider do
       apply_edits(document, harness.resolve(action))
         .should eq("foo # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace\n")
     end
+
+    {% for encoding in %i[utf8 utf16 utf32] %}
+      it "extends a directive at the end of a line with multibyte characters in {{ encoding.id }}" do
+        harness = ProviderHarness.new
+        document = harness.document(%("ź😀" # ameba:disable Lint/DebugCalls\n), position_encoding: {{ encoding }})
+        harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+        action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+        apply_edits(document, harness.resolve(action))
+          .should eq("\"ź😀\" # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace\n")
+      end
+    {% end %}
 
     it "doesn't mistake a regular comment for a directive" do
       harness = ProviderHarness.new

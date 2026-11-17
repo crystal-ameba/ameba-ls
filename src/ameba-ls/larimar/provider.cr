@@ -41,12 +41,6 @@ class AmebaLS::Provider < Larimar::Provider
     # Other schemes (`untitled:`, `git:`) have no meaningful path on disk.
     return unless document.uri.scheme == "file"
 
-    # Larimar handles each notification in its own fiber, and while it skips changes
-    # and saves of documents closed in the meantime, it doesn't do so for opens:
-    # `didOpen` registers the document before taking its lock, so a `didClose`
-    # might take it first. Its diagnostics would then never get cleared.
-    return unless open?(document)
-
     # Whatever happens below, the previous issues no longer match the document.
     @diagnostics_mutex.synchronize do
       @diagnostics.delete(document.uri)
@@ -70,7 +64,7 @@ class AmebaLS::Provider < Larimar::Provider
       document_path,
       document_path.relative_to(root),
     )
-    formatter = DiagnosticsFormatter.new
+    formatter = DiagnosticsFormatter.new(document.position_encoding)
 
     config.sources = [source]
     config.formatter = formatter
@@ -102,11 +96,6 @@ class AmebaLS::Provider < Larimar::Provider
     end
 
     publish_diagnostics(document, diagnostics)
-  end
-
-  # Returns `true` unless *document* has been closed (or reopened as another document) since.
-  private def open?(document : Larimar::TextDocument) : Bool
-    controller.document?(document.uri).same?(document)
   end
 
   # Globs are validated upfront, yet `File.match?` still raises once
@@ -212,7 +201,7 @@ class AmebaLS::Provider < Larimar::Provider
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
-    raise_if_cancelled(token)
+    token.try(&.cancelled!)
 
     diagnostics = @diagnostics_mutex.synchronize do
       @diagnostics[document.uri]?
@@ -285,16 +274,11 @@ class AmebaLS::Provider < Larimar::Provider
       document.to_s.starts_with?("#!")
   end
 
-  # `CancellationToken#cancelled!` raises unconditionally.
-  private def raise_if_cancelled(token : CancellationToken?) : Nil
-    raise CancellationException.new if token.try(&.cancelled?)
-  end
-
   def resolve_code_action(
     code_action : LSProtocol::CodeAction,
     token : CancellationToken?,
   ) : LSProtocol::CodeAction?
-    raise_if_cancelled(token)
+    token.try(&.cancelled!)
 
     return unless (data = code_action.data.try(&.as_h?)) &&
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
@@ -332,7 +316,7 @@ class AmebaLS::Provider < Larimar::Provider
       if prev_line.lstrip.starts_with?("# ameba:disable")
         position = LSProtocol::Position.new(
           line: line_number.to_u32 - 1,
-          character: prev_line.size.to_u32,
+          character: code_units(document, prev_line),
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -350,7 +334,7 @@ class AmebaLS::Provider < Larimar::Provider
       if curr_line.ends_with?(/# ameba:disable (.+?)/)
         position = LSProtocol::Position.new(
           line: line_number.to_u32,
-          character: curr_line.size.to_u32,
+          character: code_units(document, curr_line),
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -389,6 +373,11 @@ class AmebaLS::Provider < Larimar::Provider
       edit: workspace_edit,
       kind: :quick_fix,
     )
+  end
+
+  # Returns the length of *string* in the code units of the position encoding of *document*.
+  private def code_units(document, string : String) : UInt32
+    Larimar::TextDocument.code_units(string, document.position_encoding).to_u32
   end
 
   private def resolve_fix_code_action(document, diagnostic, issue)
