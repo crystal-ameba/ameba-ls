@@ -160,6 +160,22 @@ describe AmebaLS::Provider do
         .should be_nil
     end
 
+    {
+      LSProtocol::PositionEncodingKind::Utf8  => 7,
+      LSProtocol::PositionEncodingKind::Utf16 => 4,
+      LSProtocol::PositionEncodingKind::Utf32 => 3,
+    }.each do |encoding, character|
+      it "expresses the ranges in the #{encoding} code units negotiated with the client" do
+        harness = ProviderHarness.new
+        harness.open(%({"ź😀", pp 1}\n), position_encoding: encoding)
+
+        diagnostic = harness.provider.@diagnostics[SPEC_URI]
+          .find!(&.issue.rule.name.==("Lint/DebugCalls"))
+          .diagnostic
+        diagnostic.range.start.to_json.should eq(lsp_position(0, character + 4).to_json)
+      end
+    end
+
     it "clears the diagnostics on the client when analysing the document fails" do
       with_workspace("AmebaLSSpec/Raising:\n  Enabled: true\n") do |uri|
         harness = ProviderHarness.new
@@ -887,6 +903,19 @@ describe AmebaLS::Provider do
       apply_edits(document, harness.resolve(action))
         .should eq("foo # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace\n")
     end
+
+    {% for encoding in %i[utf8 utf16 utf32] %}
+      it "extends a directive at the end of a line with multibyte characters in {{ encoding.id }}" do
+        harness = ProviderHarness.new
+        document = harness.document(%("ź😀" # ameba:disable Lint/DebugCalls\n), position_encoding: {{ encoding }})
+        harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+        action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+        apply_edits(document, harness.resolve(action))
+          .should eq("\"ź😀\" # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace\n")
+      end
+    {% end %}
 
     it "doesn't mistake a regular comment for a directive" do
       harness = ProviderHarness.new

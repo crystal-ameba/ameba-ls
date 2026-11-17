@@ -64,7 +64,7 @@ class AmebaLS::Provider < Larimar::Provider
       document_path,
       document_path.relative_to(root),
     )
-    formatter = DiagnosticsFormatter.new
+    formatter = DiagnosticsFormatter.new(document.position_encoding)
 
     config.sources = [source]
     config.formatter = formatter
@@ -316,7 +316,7 @@ class AmebaLS::Provider < Larimar::Provider
       if prev_line.lstrip.starts_with?("# ameba:disable")
         position = LSProtocol::Position.new(
           line: line_number.to_u32 - 1,
-          character: prev_line.size.to_u32,
+          character: code_units(document, prev_line),
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -334,7 +334,7 @@ class AmebaLS::Provider < Larimar::Provider
       if curr_line.ends_with?(/# ameba:disable (.+?)/)
         position = LSProtocol::Position.new(
           line: line_number.to_u32,
-          character: curr_line.size.to_u32,
+          character: code_units(document, curr_line),
         )
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
@@ -373,6 +373,11 @@ class AmebaLS::Provider < Larimar::Provider
       edit: workspace_edit,
       kind: :quick_fix,
     )
+  end
+
+  # Returns the length of *string* in the code units of the position encoding of *document*.
+  private def code_units(document, string : String) : UInt32
+    Larimar::TextDocument.code_units(string, document.position_encoding).to_u32
   end
 
   private def resolve_fix_code_action(document, diagnostic, issue)

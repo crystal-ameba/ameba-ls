@@ -33,14 +33,14 @@ class ProviderHarness
     controller.register_provider(provider)
   end
 
-  def document(code, uri = SPEC_URI)
-    Larimar::TextDocument.new(code, uri).tap do |document|
+  def document(code, uri = SPEC_URI, position_encoding : LSProtocol::PositionEncodingKind = :utf8)
+    Larimar::TextDocument.new(code, uri, position_encoding: position_encoding).tap do |document|
       controller.@documents[uri] = document
     end
   end
 
-  def open(code, uri = SPEC_URI)
-    document(code, uri).tap { |document| provider.on_open(document) }
+  def open(code, uri = SPEC_URI, position_encoding : LSProtocol::PositionEncodingKind = :utf8)
+    document(code, uri, position_encoding).tap { |document| provider.on_open(document) }
   end
 
   # Closes *document* the way a client does, through `Larimar::ProviderController`.
@@ -111,7 +111,7 @@ def stub_diagnostic(code = "",
     issue: issue,
     diagnostic: LSProtocol::Diagnostic.new(
       message: issue.message,
-      range: issue.lsp_location_range,
+      range: issue.lsp_location_range(code.lines, :utf8),
     ),
   )
 end
