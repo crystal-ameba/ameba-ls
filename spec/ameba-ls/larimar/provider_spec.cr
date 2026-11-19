@@ -686,6 +686,18 @@ describe AmebaLS::Provider do
         .should eq("puts 1.is_a?(Nil)   \nputs 2.nil?\n")
     end
 
+    {% for encoding in %i[utf8 utf16 utf32] %}
+      it "fixes an issue following multibyte characters in {{ encoding.id }}" do
+        harness = ProviderHarness.new
+        document = harness.open(%(x = "ź😀"\nputs "ź😀", 1.is_a?(Nil)\n), position_encoding: {{ encoding }})
+        action = harness.actions(document, lsp_range(1, 0, 1, 40))
+          .find!(&.title.==("Fix Style/IsANil"))
+
+        apply_edits(document, harness.resolve(action))
+          .should eq(%(x = "ź😀"\nputs "ź😀", 1.nil?\n))
+      end
+    {% end %}
+
     it "returns nil when a single issue action has no diagnostics" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
