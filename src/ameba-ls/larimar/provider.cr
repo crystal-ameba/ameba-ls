@@ -208,7 +208,9 @@ class AmebaLS::Provider < Larimar::Provider
     end
     return unless diagnostics
 
-    result = [] of LSProtocol::CodeAction | LSProtocol::Command
+    # The preferred fixes come first, followed by the ignores.
+    fixes = [] of LSProtocol::CodeAction | LSProtocol::Command
+    ignores = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     # A single directive ignores all of the issues of a rule within a line.
     ignored = Set({String, Int32?}).new
@@ -220,36 +222,38 @@ class AmebaLS::Provider < Larimar::Provider
       next unless diagnostic.range.overlaps?(range)
 
       if fixable?(issue)
-        result << LSProtocol::CodeAction.new(
+        fixes << LSProtocol::CodeAction.new(
           title: "Fix #{issue.rule.name}",
           diagnostics: [diagnostic],
           kind: :quick_fix,
           is_preferred: true,
-          data: JSON::Any.new({
-            "uri"     => JSON::Any.new(document.uri.to_s),
-            "version" => JSON::Any.new(document.version),
-          } of String => JSON::Any),
+          data: code_action_data(document),
         )
       end
 
       if ignorable?(document, issue, ignored)
-        result << LSProtocol::CodeAction.new(
+        ignores << LSProtocol::CodeAction.new(
           title: "Ignore #{issue.rule.name}",
           diagnostics: [diagnostic],
           kind: :quick_fix,
-          data: JSON::Any.new({
-            "uri"     => JSON::Any.new(document.uri.to_s),
-            "version" => JSON::Any.new(document.version),
-            "ignore"  => JSON::Any.new(true),
-          } of String => JSON::Any),
+          data: code_action_data(document, ignore: true),
         )
       end
     end
 
-    result.sort_by! do |action|
-      action.as(LSProtocol::CodeAction).is_preferred ? 0 : 1
-    end
-    result
+    fixes.concat(ignores)
+  end
+
+  # Returns the data `#resolve_code_action` looks up the document
+  # of the action by, along with the version it was offered for.
+  private def code_action_data(document, ignore = false) : JSON::Any
+    data = {
+      "uri"     => JSON::Any.new(document.uri.to_s),
+      "version" => JSON::Any.new(document.version),
+    }
+    data["ignore"] = JSON::Any.new(true) if ignore
+
+    JSON::Any.new(data)
   end
 
   # `Lint/SpecFilename` renames the file on disk from within its correction block,
