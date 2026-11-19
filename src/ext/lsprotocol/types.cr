@@ -52,8 +52,4 @@ class LSProtocol::Range
         other.start < self.end
     end
   end
-
-  def overlaps?(other : SelectionRange)
-    overlaps?(other.range)
-  end
 end

@@ -124,19 +124,21 @@ end
 # Applies edits the way LSP clients do: same-position edits keep their array order.
 def apply_edits(document, action) : String
   edits = action.edit.should_not(be_nil).changes.should_not(be_nil)[document.uri]
-  code = document.to_s
+  bytes = document.to_s.to_slice
 
   ordered = edits
     .each_with_index
     .to_a
-    .sort_by! { |(edit, idx)| {document.position_to_index(edit.range.start), idx} }
+    .sort_by! { |(edit, idx)| {document.position_to_offset(edit.range.start), idx} }
 
   String.build do |io|
     last_end = 0
     ordered.each do |(edit, _)|
-      io << code[last_end...document.position_to_index(edit.range.start)] << edit.new_text
-      last_end = document.position_to_index(edit.range.end)
+      start_offset = document.position_to_offset(edit.range.start)
+      io.write(bytes[last_end...start_offset])
+      io << edit.new_text
+      last_end = document.position_to_offset(edit.range.end)
     end
-    io << code[last_end..]
+    io.write(bytes[last_end..])
   end
 end

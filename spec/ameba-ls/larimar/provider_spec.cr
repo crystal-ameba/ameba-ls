@@ -489,20 +489,6 @@ describe AmebaLS::Provider do
         .should eq(["Ignore Lint/DebugCalls"])
     end
 
-    it "accepts a selection range" do
-      harness = ProviderHarness.new
-      document = harness.document("foo\n")
-      harness.stub_diagnostics(document.uri, [stub_diagnostic])
-
-      selection = LSProtocol::SelectionRange.new(range: lsp_range(0, 0, 0, 0))
-      actions = harness.provider
-        .provide_code_actions(document, selection, code_action_context, nil)
-        .should_not(be_nil)
-
-      actions.map(&.as(LSProtocol::CodeAction).title)
-        .should eq(["Ignore Layout/TrailingWhitespace"])
-    end
-
     it "only offers to ignore issues that can't be corrected" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")

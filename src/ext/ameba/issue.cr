@@ -19,7 +19,7 @@ struct Ameba::Issue
 
     if (line = lines[line_number - 1]?)
       # Columns past the end of the line (e.g. its newline) count as one code unit each.
-      character = Larimar::TextDocument.code_units(line[0, column], encoding) +
+      character = encoding.code_units(line[0, column]) +
                   Math.max(column - line.size, 0)
     end
 
