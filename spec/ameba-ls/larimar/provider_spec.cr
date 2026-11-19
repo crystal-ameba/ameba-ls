@@ -902,6 +902,105 @@ describe AmebaLS::Provider do
         .should eq("foo # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace\n")
     end
 
+    it "extends a directive at the end of the offending line, followed by whitespace" do
+      harness = ProviderHarness.new
+      document = harness.document("foo # ameba:disable Lint/DebugCalls  \n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("foo # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace  \n")
+    end
+
+    it "doesn't extend a directive above the offending line, followed by another comment" do
+      harness = ProviderHarness.new
+      document = harness.document("# ameba:disable Lint/DebugCalls # why\nfoo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      # Ameba ignores a directive followed by another comment.
+      apply_edits(document, harness.resolve(action))
+        .should eq("# ameba:disable Lint/DebugCalls # why\n# ameba:disable Layout/TrailingWhitespace\nfoo\n")
+    end
+
+    it "doesn't extend a commented out directive" do
+      harness = ProviderHarness.new
+      document = harness.document("foo # # ameba:disable Lint/DebugCalls\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("# ameba:disable Layout/TrailingWhitespace\nfoo # # ameba:disable Lint/DebugCalls\n")
+    end
+
+    it "doesn't extend a directive on a line above, which isn't a comment one" do
+      harness = ProviderHarness.new
+      document = harness.document("bar # ameba:disable Lint/DebugCalls\nfoo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("bar # ameba:disable Lint/DebugCalls\n# ameba:disable Layout/TrailingWhitespace\nfoo\n")
+    end
+
+    it "extends a directive with its action in uppercase" do
+      harness = ProviderHarness.new
+      document = harness.document("foo # ameba:DISABLE Lint/DebugCalls\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("foo # ameba:DISABLE Lint/DebugCalls, Layout/TrailingWhitespace\n")
+    end
+
+    it "doesn't extend an enabling directive" do
+      harness = ProviderHarness.new
+      document = harness.document("foo # ameba:enable Lint/DebugCalls\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("# ameba:disable Layout/TrailingWhitespace\nfoo # ameba:enable Lint/DebugCalls\n")
+    end
+
+    it "doesn't extend a directive within a string literal" do
+      harness = ProviderHarness.new
+      document = harness.document(%(puts "# ameba:disable Lint/DebugCalls"\n))
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq(%(# ameba:disable Layout/TrailingWhitespace\nputs "# ameba:disable Lint/DebugCalls"\n))
+    end
+
+    it "ignores an issue reported on the empty line ending the document" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("foo\n# ameba:disable Layout/TrailingWhitespace\n")
+    end
+
+    it "returns nil for an issue reported past the end of the document" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 5)])
+
+      action = harness.actions(document, lsp_range(4, 0, 4, 0)).first
+
+      harness.provider.resolve_code_action(action, nil).should be_nil
+    end
+
     {% for encoding in %i[utf8 utf16 utf32] %}
       it "extends a directive at the end of a line with multibyte characters in {{ encoding.id }}" do
         harness = ProviderHarness.new
@@ -937,14 +1036,12 @@ describe AmebaLS::Provider do
         .should eq("bar\r\n  # ameba:disable Layout/TrailingWhitespace\r\n  foo\r\n")
     end
 
-    it "returns nil for an issue without a location" do
+    it "doesn't offer to ignore an issue without a location" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
       harness.stub_diagnostics(document.uri, [stub_diagnostic(location: nil)])
 
-      action = harness.actions(document, lsp_range(0, 0, 0, 0)).first
-
-      harness.provider.resolve_code_action(action, nil).should be_nil
+      harness.actions(document, lsp_range(0, 0, 0, 0)).should be_empty
     end
 
     it "produces a directive ameba actually honours" do
