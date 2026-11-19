@@ -197,7 +197,7 @@ class AmebaLS::Provider < Larimar::Provider
 
   def provide_code_actions(
     document : Larimar::TextDocument,
-    range : LSProtocol::Range | LSProtocol::SelectionRange,
+    range : LSProtocol::Range,
     context : LSProtocol::CodeActionContext,
     token : CancellationToken?,
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
@@ -314,10 +314,7 @@ class AmebaLS::Provider < Larimar::Provider
       prev_line = lines[line_number - 1]
 
       if prev_line.lstrip.starts_with?("# ameba:disable")
-        position = LSProtocol::Position.new(
-          line: line_number.to_u32 - 1,
-          character: code_units(document, prev_line),
-        )
+        position = document.position(line_number - 1, prev_line.bytesize)
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
           range: LSProtocol::Range.new(
@@ -332,10 +329,7 @@ class AmebaLS::Provider < Larimar::Provider
       curr_line = lines[line_number]
 
       if curr_line.ends_with?(/# ameba:disable (.+?)/)
-        position = LSProtocol::Position.new(
-          line: line_number.to_u32,
-          character: code_units(document, curr_line),
-        )
+        position = document.position(line_number, curr_line.bytesize)
         text_edits << LSProtocol::TextEdit.new(
           new_text: ", #{issue.rule.name}",
           range: LSProtocol::Range.new(
@@ -375,11 +369,6 @@ class AmebaLS::Provider < Larimar::Provider
     )
   end
 
-  # Returns the length of *string* in the code units of the position encoding of *document*.
-  private def code_units(document, string : String) : UInt32
-    Larimar::TextDocument.code_units(string, document.position_encoding).to_u32
-  end
-
   private def resolve_fix_code_action(document, diagnostic, issue)
     return unless fixable?(issue)
 
@@ -402,16 +391,25 @@ class AmebaLS::Provider < Larimar::Provider
   # Clients apply same-position edits in their array order, which here follows
   # the order `Ameba::Source::Corrector#process` applies them in.
   private def get_text_edits(document, corrector : Ameba::Source::Corrector) : Array(LSProtocol::TextEdit)
+    code = document.to_s
     edits = [] of LSProtocol::TextEdit
     corrector.each_replacement do |begin_pos, end_pos, replacement|
       edits << LSProtocol::TextEdit.new(
         new_text: replacement,
         range: LSProtocol::Range.new(
-          start: document.index_to_position(begin_pos),
-          end: document.index_to_position(end_pos),
+          start: char_index_to_position(document, code, begin_pos),
+          end: char_index_to_position(document, code, end_pos),
         ),
       )
     end
     edits
+  end
+
+  # Ameba's corrector counts characters, while `Larimar::TextDocument` counts bytes.
+  private def char_index_to_position(document, code : String, index : Int32) : LSProtocol::Position
+    offset = code.char_index_to_byte_index(index) ||
+             raise IndexError.new("#{index} not in document")
+
+    document.offset_to_position(offset)
   end
 end

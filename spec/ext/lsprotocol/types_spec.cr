@@ -81,12 +81,5 @@ describe LSProtocol::Range do
       lsp_range(1, 0, 1, 9).overlaps?(lsp_range(2, 0, 2, 9)).should be_false
       lsp_range(2, 0, 2, 9).overlaps?(lsp_range(1, 0, 1, 9)).should be_false
     end
-
-    it "accepts a selection range" do
-      range = lsp_range(1, 0, 1, 9)
-
-      range.overlaps?(LSProtocol::SelectionRange.new(range: lsp_range(1, 5, 1, 5))).should be_true
-      range.overlaps?(LSProtocol::SelectionRange.new(range: lsp_range(2, 0, 2, 0))).should be_false
-    end
   end
 end

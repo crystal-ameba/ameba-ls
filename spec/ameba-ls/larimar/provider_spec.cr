@@ -489,20 +489,6 @@ describe AmebaLS::Provider do
         .should eq(["Ignore Lint/DebugCalls"])
     end
 
-    it "accepts a selection range" do
-      harness = ProviderHarness.new
-      document = harness.document("foo\n")
-      harness.stub_diagnostics(document.uri, [stub_diagnostic])
-
-      selection = LSProtocol::SelectionRange.new(range: lsp_range(0, 0, 0, 0))
-      actions = harness.provider
-        .provide_code_actions(document, selection, code_action_context, nil)
-        .should_not(be_nil)
-
-      actions.map(&.as(LSProtocol::CodeAction).title)
-        .should eq(["Ignore Layout/TrailingWhitespace"])
-    end
-
     it "only offers to ignore issues that can't be corrected" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
@@ -699,6 +685,18 @@ describe AmebaLS::Provider do
       apply_edits(document, harness.resolve(action))
         .should eq("puts 1.is_a?(Nil)   \nputs 2.nil?\n")
     end
+
+    {% for encoding in %i[utf8 utf16 utf32] %}
+      it "fixes an issue following multibyte characters in {{ encoding.id }}" do
+        harness = ProviderHarness.new
+        document = harness.open(%(x = "ź😀"\nputs "ź😀", 1.is_a?(Nil)\n), position_encoding: {{ encoding }})
+        action = harness.actions(document, lsp_range(1, 0, 1, 40))
+          .find!(&.title.==("Fix Style/IsANil"))
+
+        apply_edits(document, harness.resolve(action))
+          .should eq(%(x = "ź😀"\nputs "ź😀", 1.nil?\n))
+      end
+    {% end %}
 
     it "returns nil when a single issue action has no diagnostics" do
       harness = ProviderHarness.new
