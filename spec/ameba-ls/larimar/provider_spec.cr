@@ -1044,6 +1044,24 @@ describe AmebaLS::Provider do
       harness.actions(document, lsp_range(0, 0, 0, 0)).should be_empty
     end
 
+    it "returns nil for an issue that can't be ignored, even when asked to" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      diagnostic = stub_diagnostic(rule: Ameba::Rule::Lint::Syntax.new)
+      harness.stub_diagnostics(document.uri, [diagnostic])
+
+      action = LSProtocol::CodeAction.new(
+        title: "Ignore Lint/Syntax",
+        diagnostics: [diagnostic.diagnostic],
+        data: JSON::Any.new({
+          "uri"     => JSON::Any.new(document.uri.to_s),
+          "version" => JSON::Any.new(document.version.to_i64),
+          "ignore"  => JSON::Any.new(true),
+        } of String => JSON::Any),
+      )
+      harness.provider.resolve_code_action(action, nil).should be_nil
+    end
+
     it "produces a directive ameba actually honours" do
       harness = ProviderHarness.new
       document = harness.open("pp 1\n")
