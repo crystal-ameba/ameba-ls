@@ -247,6 +247,7 @@ class AmebaLS::Provider < Larimar::Provider
     fixes.concat(ignores)
   end
 
+  # ameba:disable Metrics/CyclomaticComplexity
   def resolve_code_action(
     code_action : LSProtocol::CodeAction,
     token : CancellationToken?,
