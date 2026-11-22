@@ -224,6 +224,9 @@ class AmebaLS::Provider < Larimar::Provider
     # A single directive ignores all of the issues of a rule within a line.
     ignored = Set({String, UInt32}).new
 
+    # Parsed once, as soon as there's an issue to check.
+    literal_lines = nil
+
     diagnostics.each do |diagnostic|
       issue, diagnostic =
         diagnostic.issue, diagnostic.diagnostic
@@ -236,7 +239,9 @@ class AmebaLS::Provider < Larimar::Provider
         )
       end
 
-      if ignorable?(document, issue) &&
+      literal_lines ||= MultilineLiterals.lines_in(document.to_s)
+
+      if ignorable?(document, issue, literal_lines) &&
          ignored.add?({issue.rule.name, diagnostic.range.start.line})
         ignores << ignore_code_action(issue, diagnostic,
           data: code_action_data(document, ignore: true),
