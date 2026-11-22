@@ -13,11 +13,15 @@ module AmebaLS::IgnoreEdits
   # Returns `true` if the *issue* can be ignored with an inline directive.
   #
   # An issue with no location can't be ignored by a directive, as it has no line.
-  private def ignorable?(document, issue : Ameba::Issue) : Bool
+  #
+  # The *literal_lines* of `MultilineLiterals.lines_in` the *document* can be
+  # passed in when checking many issues, so the document is parsed only once.
+  private def ignorable?(document, issue : Ameba::Issue, literal_lines : Set(Int32)? = nil) : Bool
     return false unless (line_number = issue.location.try(&.line_number))
 
     !issue.rule.special? &&
-      !breaks_shebang?(document, line_number)
+      !breaks_shebang?(document, line_number) &&
+      !within_literal?(document, line_number, literal_lines)
   end
 
   # A directive ignoring an issue reported on the first line would have to be placed
@@ -25,6 +29,13 @@ module AmebaLS::IgnoreEdits
   private def breaks_shebang?(document, line_number : Int32) : Bool
     line_number == 1 &&
       document.to_s.starts_with?("#!")
+  end
+
+  # A directive placed on a line within a multi-line literal (e.g. a heredoc)
+  # would become a part of its value, instead of a comment.
+  private def within_literal?(document, line_number : Int32, literal_lines : Set(Int32)? = nil) : Bool
+    literal_lines ||= MultilineLiterals.lines_in(document.to_s)
+    literal_lines.includes?(line_number)
   end
 
   # Returns an edit ignoring the *issue* within *document*, or `nil` if it can't be ignored.

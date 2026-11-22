@@ -1122,6 +1122,52 @@ describe AmebaLS::Provider do
     end
   end
 
+  describe "ignore action within literals" do
+    it "isn't offered on the closing line of a heredoc" do
+      harness = ProviderHarness.new
+      document = harness.document("x = <<-TXT\n  hello\n  TXT\nputs x\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 3)])
+
+      harness.actions(document, lsp_range(2, 0, 2, 0)).should be_empty
+    end
+
+    it "isn't offered within a heredoc" do
+      harness = ProviderHarness.new
+      document = harness.open("x = <<-TXT\n  hello   \n  TXT\nputs x\n")
+
+      harness.rule_names(document.uri).should eq(["Layout/TrailingWhitespace"])
+      harness.actions(document, lsp_range(1, 0, 1, 20)).map(&.title)
+        .should eq(["Fix Layout/TrailingWhitespace"])
+    end
+
+    it "returns nil for an issue within a heredoc, even when asked to" do
+      harness = ProviderHarness.new
+      document = harness.document("x = <<-TXT\n  hello\n  TXT\nputs x\n")
+      diagnostic = stub_diagnostic(line: 2)
+      harness.stub_diagnostics(document.uri, [diagnostic])
+
+      action = LSProtocol::CodeAction.new(
+        title: "Ignore Layout/TrailingWhitespace",
+        diagnostics: [diagnostic.diagnostic],
+        data: JSON::Any.new({
+          "uri"     => JSON::Any.new(document.uri.to_s),
+          "version" => JSON::Any.new(document.version.to_i64),
+          "ignore"  => JSON::Any.new(true),
+        } of String => JSON::Any),
+      )
+      harness.provider.resolve_code_action(action, nil).should be_nil
+    end
+
+    it "is offered on the line a literal starts at" do
+      harness = ProviderHarness.new
+      document = harness.document("x = <<-TXT\n  hello\n  TXT\nputs x\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 1)])
+
+      apply_edits(document, harness.resolve(harness.actions(document, lsp_range(0, 0, 0, 0)).first))
+        .should eq("# ameba:disable Layout/TrailingWhitespace\nx = <<-TXT\n  hello\n  TXT\nputs x\n")
+    end
+  end
+
   # `LSProtocol::CodeActionKind#to_s` only maps some of the kinds to their LSP
   # names, so this currently serializes as "QuickFix".
   pending "serializes quick fixes with the quickfix kind" do
