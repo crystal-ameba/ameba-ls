@@ -65,6 +65,7 @@ describe AmebaLS::DiagnosticsFormatter do
           Ameba::Rule::Lint::UnreachableCode.new,
           Ameba::Rule::Style::RedundantBegin.new,
           Ameba::Rule::Lint::UnneededDisableDirective.new,
+          Ameba::Rule::Lint::DuplicateRequire.new,
         }.each do |rule|
           format(source_with_issue(rule)).first.diagnostic.tags
             .should eq([LSProtocol::DiagnosticTag::Unnecessary])
