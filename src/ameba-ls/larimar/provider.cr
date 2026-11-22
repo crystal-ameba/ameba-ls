@@ -1,9 +1,11 @@
+require "./config_watcher"
 require "./fix_edits"
 require "./ignore_edits"
 
 class AmebaLS::Provider < Larimar::Provider
   include Larimar::CodeActionProvider
 
+  include ConfigWatcher
   include FixEdits
   include IgnoreEdits
 
@@ -29,6 +31,19 @@ class AmebaLS::Provider < Larimar::Provider
   # The errors users were already notified about, by the project root.
   @config_errors = Hash(Path, String).new
   @config_errors_mutex = Mutex.new
+
+  # Analyses the open documents again, once a config file has changed.
+  def on_config_change : Nil
+    controller.documents.each do |document|
+      # The same way Larimar handles a change, unless the document got closed meanwhile.
+      document.mutex.write do
+        handle_ameba(document) if controller.document?(document.uri).same?(document)
+      end
+    rescue ex
+      # Shouldn't keep the rest of the documents from being analysed.
+      Log.error(exception: ex, &.emit("Failed to analyse a document", uri: document.uri.to_s))
+    end
+  end
 
   def on_open(document : Larimar::TextDocument) : Nil
     handle_ameba(document)
