@@ -1,7 +1,9 @@
+require "./fix_edits"
 require "./ignore_edits"
 
 class AmebaLS::Provider < Larimar::Provider
   include Larimar::CodeActionProvider
+  include FixEdits
   include IgnoreEdits
 
   Log = ::Larimar::Log.for(self)
@@ -260,13 +262,6 @@ class AmebaLS::Provider < Larimar::Provider
     JSON::Any.new(data)
   end
 
-  # `Lint/SpecFilename` renames the file on disk from within its correction block,
-  # instead of scheduling an edit, so it must never run while resolving a code action.
-  private def fixable?(issue : Ameba::Issue) : Bool
-    issue.correctable? &&
-      !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
-  end
-
   def resolve_code_action(
     code_action : LSProtocol::CodeAction,
     token : CancellationToken?,
@@ -312,13 +307,10 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   private def resolve_fix_code_action(document, diagnostic, issue)
-    return unless fixable?(issue)
-
-    corrector = Ameba::Source::Corrector.new(document.to_s)
-    issue.correct(corrector)
+    return unless (text_edits = fix_edits(document, issue))
 
     workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => get_text_edits(document, corrector)},
+      changes: {document.uri => text_edits},
     )
 
     LSProtocol::CodeAction.new(
@@ -328,30 +320,5 @@ class AmebaLS::Provider < Larimar::Provider
       kind: :quick_fix,
       is_preferred: true,
     )
-  end
-
-  # Clients apply same-position edits in their array order, which here follows
-  # the order `Ameba::Source::Corrector#process` applies them in.
-  private def get_text_edits(document, corrector : Ameba::Source::Corrector) : Array(LSProtocol::TextEdit)
-    code = document.to_s
-    edits = [] of LSProtocol::TextEdit
-    corrector.each_replacement do |begin_pos, end_pos, replacement|
-      edits << LSProtocol::TextEdit.new(
-        new_text: replacement,
-        range: LSProtocol::Range.new(
-          start: char_index_to_position(document, code, begin_pos),
-          end: char_index_to_position(document, code, end_pos),
-        ),
-      )
-    end
-    edits
-  end
-
-  # Ameba's corrector counts characters, while `Larimar::TextDocument` counts bytes.
-  private def char_index_to_position(document, code : String, index : Int32) : LSProtocol::Position
-    offset = code.char_index_to_byte_index(index) ||
-             raise IndexError.new("#{index} not in document")
-
-    document.offset_to_position(offset)
   end
 end
