@@ -245,6 +245,15 @@ class AmebaLS::Provider < Larimar::Provider
     end
 
     fixes.concat(ignores)
+
+    # Applies to the whole document, so it's offered regardless of the requested range.
+    if diagnostics.any? { |entry| fixable?(entry.issue) }
+      fixes << fix_all_code_action(
+        data: code_action_data(document, fix_all: true),
+      )
+    end
+
+    fixes
   end
 
   # ameba:disable Metrics/CyclomaticComplexity
@@ -258,17 +267,27 @@ class AmebaLS::Provider < Larimar::Provider
                   (document_uri_string = data["uri"]?.try(&.as_s?)) &&
                   (document_uri = URI.parse(document_uri_string)) &&
                   (document = controller.document?(document_uri)) &&
-                  (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (version = data["version"]?.try(&.as_i?))
 
     ignore = data["ignore"]?.try(&.as_bool?) || false
+    fix_all = data["fix_all"]?.try(&.as_bool?) || false
 
     # Only reads the document, so it doesn't block other readers.
     document.mutex.read do
       # The document has changed since the action was offered,
-      # hence the issue it was offered for might not be there anymore.
+      # hence the issues it was offered for might not be there anymore.
       next unless version == document.version
       next unless (diagnostics = diagnostics_for(document_uri))
+
+      if fix_all
+        text_edits, fixed = fix_all_edits(document, diagnostics)
+        next fix_all_code_action(
+          diagnostics: fixed.map(&.diagnostic),
+          edit: workspace_edit(document, text_edits),
+        )
+      end
+
+      next unless (diagnostic = code_action.diagnostics.try(&.first?))
       next unless (issue = diagnostics.find(&.matches?(diagnostic)).try(&.issue))
 
       if ignore
@@ -287,12 +306,13 @@ class AmebaLS::Provider < Larimar::Provider
 
   # Returns the data `#resolve_code_action` looks up the document
   # of the action by, along with the version it was offered for.
-  private def code_action_data(document, ignore = false) : JSON::Any
+  private def code_action_data(document, ignore = false, fix_all = false) : JSON::Any
     data = {
       "uri"     => JSON::Any.new(document.uri.to_s),
       "version" => JSON::Any.new(document.version),
     }
     data["ignore"] = JSON::Any.new(true) if ignore
+    data["fix_all"] = JSON::Any.new(true) if fix_all
 
     JSON::Any.new(data)
   end
@@ -317,6 +337,19 @@ class AmebaLS::Provider < Larimar::Provider
       title: "Ignore #{issue.rule.name}",
       diagnostics: [diagnostic],
       kind: :quick_fix,
+      data: data,
+      edit: edit,
+    )
+  end
+
+  # Returns the action fixing all of the fixable issues of a document, offered with
+  # either *data* to resolve it by, or resolved already with an *edit* fixing the
+  # issues of the given *diagnostics*.
+  private def fix_all_code_action(*, diagnostics = nil, data = nil, edit = nil) : LSProtocol::CodeAction
+    LSProtocol::CodeAction.new(
+      title: "Fix all auto-correctable issues",
+      diagnostics: diagnostics,
+      kind: :source_fix_all,
       data: data,
       edit: edit,
     )
