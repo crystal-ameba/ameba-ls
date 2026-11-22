@@ -3,6 +3,7 @@ require "./ignore_edits"
 
 class AmebaLS::Provider < Larimar::Provider
   include Larimar::CodeActionProvider
+
   include FixEdits
   include IgnoreEdits
 
@@ -18,6 +19,12 @@ class AmebaLS::Provider < Larimar::Provider
   # Documents are handled in parallel, while this hash is shared between all of them.
   @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
   @diagnostics_mutex = Mutex.new
+
+  private def diagnostics_for(uri : URI) : Array(IssueDiagnostic)?
+    @diagnostics_mutex.synchronize do
+      @diagnostics[uri]?
+    end
+  end
 
   # The errors users were already notified about, by the project root.
   @config_errors = Hash(Path, String).new
@@ -208,10 +215,7 @@ class AmebaLS::Provider < Larimar::Provider
   ) : Array(LSProtocol::CodeAction | LSProtocol::Command)?
     token.try(&.cancelled!)
 
-    diagnostics = @diagnostics_mutex.synchronize do
-      @diagnostics[document.uri]?
-    end
-    return unless diagnostics
+    return unless (diagnostics = diagnostics_for(document.uri))
 
     # The preferred fixes come first, followed by the ignores.
     fixes = [] of LSProtocol::CodeAction | LSProtocol::Command
@@ -227,39 +231,20 @@ class AmebaLS::Provider < Larimar::Provider
       next unless diagnostic.range.overlaps?(range)
 
       if fixable?(issue)
-        fixes << LSProtocol::CodeAction.new(
-          title: "Fix #{issue.rule.name}",
-          diagnostics: [diagnostic],
-          kind: :quick_fix,
-          is_preferred: true,
+        fixes << fix_code_action(issue, diagnostic,
           data: code_action_data(document),
         )
       end
 
       if ignorable?(document, issue) &&
          ignored.add?({issue.rule.name, diagnostic.range.start.line})
-        ignores << LSProtocol::CodeAction.new(
-          title: "Ignore #{issue.rule.name}",
-          diagnostics: [diagnostic],
-          kind: :quick_fix,
+        ignores << ignore_code_action(issue, diagnostic,
           data: code_action_data(document, ignore: true),
         )
       end
     end
 
     fixes.concat(ignores)
-  end
-
-  # Returns the data `#resolve_code_action` looks up the document
-  # of the action by, along with the version it was offered for.
-  private def code_action_data(document, ignore = false) : JSON::Any
-    data = {
-      "uri"     => JSON::Any.new(document.uri.to_s),
-      "version" => JSON::Any.new(document.version),
-    }
-    data["ignore"] = JSON::Any.new(true) if ignore
-
-    JSON::Any.new(data)
   end
 
   def resolve_code_action(
@@ -275,50 +260,70 @@ class AmebaLS::Provider < Larimar::Provider
                   (diagnostic = code_action.diagnostics.try(&.first?)) &&
                   (version = data["version"]?.try(&.as_i?))
 
+    ignore = data["ignore"]?.try(&.as_bool?) || false
+
     # Only reads the document, so it doesn't block other readers.
     document.mutex.read do
       # The document has changed since the action was offered,
       # hence the issue it was offered for might not be there anymore.
       next unless version == document.version
-      next unless (diagnostics = @diagnostics_mutex.synchronize { @diagnostics[document_uri]? })
+      next unless (diagnostics = diagnostics_for(document_uri))
       next unless (issue = diagnostics.find(&.matches?(diagnostic)).try(&.issue))
 
-      if data["ignore"]?.try(&.as_bool?)
-        resolve_ignore_code_action(document, diagnostic, issue)
+      if ignore
+        next unless (text_edit = ignore_edit(document, issue))
+        ignore_code_action(issue, diagnostic,
+          edit: workspace_edit(document, [text_edit]),
+        )
       else
-        resolve_fix_code_action(document, diagnostic, issue)
+        next unless (text_edits = fix_edits(document, issue))
+        fix_code_action(issue, diagnostic,
+          edit: workspace_edit(document, text_edits),
+        )
       end
     end
   end
 
-  private def resolve_ignore_code_action(document, diagnostic, issue)
-    return unless (text_edit = ignore_edit(document, issue))
+  # Returns the data `#resolve_code_action` looks up the document
+  # of the action by, along with the version it was offered for.
+  private def code_action_data(document, ignore = false) : JSON::Any
+    data = {
+      "uri"     => JSON::Any.new(document.uri.to_s),
+      "version" => JSON::Any.new(document.version),
+    }
+    data["ignore"] = JSON::Any.new(true) if ignore
 
-    workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => [text_edit]},
-    )
-
-    LSProtocol::CodeAction.new(
-      title: "Ignore #{issue.rule.name}",
-      diagnostics: [diagnostic],
-      edit: workspace_edit,
-      kind: :quick_fix,
-    )
+    JSON::Any.new(data)
   end
 
-  private def resolve_fix_code_action(document, diagnostic, issue)
-    return unless (text_edits = fix_edits(document, issue))
-
-    workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => text_edits},
-    )
-
+  # Returns the action fixing the *issue*, offered with either *data* to resolve
+  # it by, or resolved already with an *edit*.
+  private def fix_code_action(issue, diagnostic, *, data = nil, edit = nil) : LSProtocol::CodeAction
     LSProtocol::CodeAction.new(
       title: "Fix #{issue.rule.name}",
       diagnostics: [diagnostic],
-      edit: workspace_edit,
       kind: :quick_fix,
       is_preferred: true,
+      data: data,
+      edit: edit,
+    )
+  end
+
+  # Returns the action ignoring the *issue*, offered with either *data* to resolve
+  # it by, or resolved already with an *edit*.
+  private def ignore_code_action(issue, diagnostic, *, data = nil, edit = nil) : LSProtocol::CodeAction
+    LSProtocol::CodeAction.new(
+      title: "Ignore #{issue.rule.name}",
+      diagnostics: [diagnostic],
+      kind: :quick_fix,
+      data: data,
+      edit: edit,
+    )
+  end
+
+  private def workspace_edit(document, text_edits : Array(LSProtocol::TextEdit)) : LSProtocol::WorkspaceEdit
+    LSProtocol::WorkspaceEdit.new(
+      changes: {document.uri => text_edits},
     )
   end
 end
