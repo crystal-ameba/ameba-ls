@@ -1,6 +1,11 @@
 class AmebaLS::Provider < Larimar::Provider
   include Larimar::CodeActionProvider
 
+  # Parses inline directives the way Ameba does, telling apart the ones it ignores.
+  private module InlineDirectives
+    extend Ameba::InlineComments
+  end
+
   Log = ::Larimar::Log.for(self)
 
   # Rules that are disabled on change to avoid unnecessary diagnostics while typing.
@@ -9,6 +14,10 @@ class AmebaLS::Provider < Larimar::Provider
     Layout/TrailingWhitespace
     Lint/Formatting
   ]
+
+  # The index of the group capturing the rules of a directive.
+  private DIRECTIVE_RULES_GROUP =
+    Ameba::InlineComments::COMMENT_DIRECTIVE_REGEX.name_table.key_for("rules")
 
   # Documents are handled in parallel, while this hash is shared between all of them.
   @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
@@ -213,7 +222,7 @@ class AmebaLS::Provider < Larimar::Provider
     ignores = [] of LSProtocol::CodeAction | LSProtocol::Command
 
     # A single directive ignores all of the issues of a rule within a line.
-    ignored = Set({String, Int32?}).new
+    ignored = Set({String, UInt32}).new
 
     diagnostics.each do |diagnostic|
       issue, diagnostic =
@@ -231,7 +240,8 @@ class AmebaLS::Provider < Larimar::Provider
         )
       end
 
-      if ignorable?(document, issue, ignored)
+      if ignorable?(document, issue) &&
+         ignored.add?({issue.rule.name, diagnostic.range.start.line})
         ignores << LSProtocol::CodeAction.new(
           title: "Ignore #{issue.rule.name}",
           diagnostics: [diagnostic],
@@ -263,18 +273,20 @@ class AmebaLS::Provider < Larimar::Provider
       !issue.rule.is_a?(Ameba::Rule::Lint::SpecFilename)
   end
 
-  # Returns `true` if an action ignoring the *issue* should be offered,
-  # recording its rule and line in *ignored*, so it's offered once per line.
-  private def ignorable?(document, issue, ignored) : Bool
+  # Returns `true` if the *issue* can be ignored with an inline directive.
+  #
+  # An issue with no location can't be ignored by a directive, as it has no line.
+  private def ignorable?(document, issue : Ameba::Issue) : Bool
+    return false unless (line_number = issue.location.try(&.line_number))
+
     !issue.rule.special? &&
-      !breaks_shebang?(document, issue) &&
-      ignored.add?({issue.rule.name, issue.location.try(&.line_number)})
+      !breaks_shebang?(document, line_number)
   end
 
   # A directive ignoring an issue reported on the first line would have to be placed
   # either above or at the end of it, which in both cases would break a shebang there.
-  private def breaks_shebang?(document, issue) : Bool
-    (issue.location.try(&.line_number) == 1) &&
+  private def breaks_shebang?(document, line_number : Int32) : Bool
+    line_number == 1 &&
       document.to_s.starts_with?("#!")
   end
 
@@ -308,61 +320,18 @@ class AmebaLS::Provider < Larimar::Provider
   end
 
   private def resolve_ignore_code_action(document, diagnostic, issue)
-    return unless (location = issue.location)
-    line_number = location.line_number - 1
+    return unless ignorable?(document, issue)
+    return unless (line = issue.location.try(&.line_number.- 1))
 
-    text_edits = [] of LSProtocol::TextEdit
-    lines = document.to_s.lines
-
-    if line_number.positive?
-      prev_line = lines[line_number - 1]
-
-      if prev_line.lstrip.starts_with?("# ameba:disable")
-        position = document.position(line_number - 1, prev_line.bytesize)
-        text_edits << LSProtocol::TextEdit.new(
-          new_text: ", #{issue.rule.name}",
-          range: LSProtocol::Range.new(
-            start: position,
-            end: position,
-          ),
-        )
-      end
-    end
-
-    if text_edits.empty?
-      curr_line = lines[line_number]
-
-      if curr_line.ends_with?(/# ameba:disable (.+?)/)
-        position = document.position(line_number, curr_line.bytesize)
-        text_edits << LSProtocol::TextEdit.new(
-          new_text: ", #{issue.rule.name}",
-          range: LSProtocol::Range.new(
-            start: position,
-            end: position,
-          ),
-        )
-      end
-    end
-
-    if text_edits.empty?
-      indent = lines[line_number].match!(/^\s*/)[0]
-      newline = document.to_s.includes?("\r\n") ? "\r\n" : "\n"
-
-      position = LSProtocol::Position.new(
-        line: line_number.to_u32,
-        character: 0_u32,
-      )
-      text_edits << LSProtocol::TextEdit.new(
-        new_text: "#{indent}# ameba:disable #{issue.rule.name}#{newline}",
-        range: LSProtocol::Range.new(
-          start: position,
-          end: position,
-        ),
-      )
-    end
+    rule_name = issue.rule.name
+    text_edit =
+      extend_directive(document, line - 1, rule_name, above: true) ||
+        extend_directive(document, line, rule_name, above: false) ||
+        add_directive(document, line, rule_name)
+    return unless text_edit
 
     workspace_edit = LSProtocol::WorkspaceEdit.new(
-      changes: {document.uri => text_edits},
+      changes: {document.uri => [text_edit]},
     )
 
     LSProtocol::CodeAction.new(
@@ -370,6 +339,73 @@ class AmebaLS::Provider < Larimar::Provider
       diagnostics: [diagnostic],
       edit: workspace_edit,
       kind: :quick_fix,
+    )
+  end
+
+  # Returns an edit appending *rule_name* right after the rules of the `disable`
+  # directive within the *line* of *document*, if Ameba honors it there, i.e.
+  # if it's the line *above* the issue and a comment one, or if it's the line
+  # of the issue and the directive ends it.
+  #
+  # Ameba ignores a directive followed by another comment, or commented out itself,
+  # while the one ending a line is told apart from one within a string literal.
+  private def extend_directive(document, line : Int32, rule_name : String, *, above : Bool) : LSProtocol::TextEdit?
+    return unless (line_text = line_at(document, line))
+    text, line_start = line_text
+
+    return unless (match = Ameba::InlineComments::COMMENT_DIRECTIVE_REGEX.match(text))
+    return unless Ameba::InlineComments::Action.parse?(match["action"]).try(&.disable?)
+
+    rules_end = match.byte_end(DIRECTIVE_RULES_GROUP)
+
+    if above
+      return unless text.lstrip.starts_with?('#')
+    else
+      return unless text.byte_slice(rules_end).blank?
+    end
+
+    # Lexes the line, hence it goes last.
+    return unless InlineDirectives.parse_inline_directive(text)
+
+    insert(document, line_start + rules_end, ", #{rule_name}")
+  end
+
+  # Returns an edit adding a directive disabling *rule_name* above the *line*
+  # of *document*, indented the same way, or `nil` if there's no such line.
+  private def add_directive(document, line : Int32, rule_name : String) : LSProtocol::TextEdit?
+    return unless (line_text = line_at(document, line))
+    text, line_start = line_text
+
+    indent = text[/\A[ \t]*/]
+    newline = document.to_s.includes?("\r\n") ? "\r\n" : "\n"
+
+    insert(document, line_start, "#{indent}# ameba:disable #{rule_name}#{newline}")
+  end
+
+  # Returns the text of the *line* of *document*, without its line break,
+  # along with the byte offset it starts at, or `nil` if there's no such line.
+  private def line_at(document, line : Int32) : {String, Int32}?
+    return if line.negative?
+
+    line_start = document.position_to_offset(
+      LSProtocol::Position.new(line: line.to_u32, character: 0_u32)
+    )
+    # A character past the end of the line resolves to the end of that line.
+    line_end = document.position_to_offset(
+      LSProtocol::Position.new(line: line.to_u32, character: UInt32::MAX)
+    )
+
+    {document.to_s.byte_slice(line_start, line_end - line_start), line_start}
+  rescue IndexError
+  end
+
+  # Returns an edit inserting *text* at the byte *offset* of *document*.
+  private def insert(document, offset : Int32, text : String) : LSProtocol::TextEdit
+    position = document.offset_to_position(offset)
+
+    LSProtocol::TextEdit.new(
+      new_text: text,
+      range: LSProtocol::Range.new(start: position, end: position),
     )
   end
 
