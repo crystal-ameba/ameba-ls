@@ -1014,6 +1014,41 @@ describe AmebaLS::Provider do
       end
     {% end %}
 
+    it "extends a directive on the previous line followed by other text" do
+      harness = ProviderHarness.new
+      document = harness.document("  # ameba:disable Lint/DebugCalls -- legacy\n  foo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("  # ameba:disable Lint/DebugCalls, Layout/TrailingWhitespace -- legacy\n  foo\n")
+    end
+
+    it "extends a directive followed by other text in a way ameba actually honours" do
+      harness = ProviderHarness.new
+      document = harness.open("# ameba:disable Style/VerboseBlock -- legacy\npp 1\n")
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0))
+        .find!(&.title.==("Ignore Lint/DebugCalls"))
+
+      document.update_whole(apply_edits(document, harness.resolve(action)))
+      harness.provider.on_save(document)
+
+      harness.rule_names.should_not contain("Lint/DebugCalls")
+    end
+
+    it "adds a new directive when the existing one has no rules" do
+      harness = ProviderHarness.new
+      document = harness.document("# ameba:disable\nfoo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic(line: 2)])
+
+      action = harness.actions(document, lsp_range(1, 0, 1, 0)).first
+
+      apply_edits(document, harness.resolve(action))
+        .should eq("# ameba:disable\n# ameba:disable Layout/TrailingWhitespace\nfoo\n")
+    end
+
     it "doesn't mistake a regular comment for a directive" do
       harness = ProviderHarness.new
       document = harness.document("# a comment\nfoo\n")
