@@ -1,9 +1,11 @@
+require "./config_watcher"
 require "./fix_edits"
 require "./ignore_edits"
 
 class AmebaLS::Provider < Larimar::Provider
   include Larimar::CodeActionProvider
 
+  include ConfigWatcher
   include FixEdits
   include IgnoreEdits
 
@@ -15,9 +17,6 @@ class AmebaLS::Provider < Larimar::Provider
     Layout/TrailingWhitespace
     Lint/Formatting
   ]
-
-  # The ID of the registration watching config files for changes.
-  CONFIG_WATCHER_ID = "ameba-ls/config-watcher"
 
   # Documents are handled in parallel, while this hash is shared between all of them.
   @diagnostics = Hash(URI, Array(IssueDiagnostic)).new
@@ -33,40 +32,8 @@ class AmebaLS::Provider < Larimar::Provider
   @config_errors = Hash(Path, String).new
   @config_errors_mutex = Mutex.new
 
-  # Asks the client to watch config files for changes, if it's able to.
-  def when_ready : Nil
-    return unless controller.capabilities
-                    .try(&.workspace)
-                    .try(&.did_change_watched_files)
-                    .try(&.dynamic_registration)
-
-    options = LSProtocol::DidChangeWatchedFilesRegistrationOptions.new(
-      watchers: [
-        LSProtocol::FileSystemWatcher.new(
-          glob_pattern: "**/#{Ameba::Config::Loader::FILENAME}",
-        ),
-      ],
-    )
-    controller.server.send_msg(
-      LSProtocol::RegistrationRequest.new(
-        id: CONFIG_WATCHER_ID,
-        params: LSProtocol::RegistrationParams.new(
-          registrations: [
-            LSProtocol::Registration.new(
-              id: CONFIG_WATCHER_ID,
-              method: "workspace/didChangeWatchedFiles",
-              register_options: JSON.parse(options.to_json),
-            ),
-          ],
-        ),
-      )
-    )
-  end
-
   # Analyses the open documents again, once a config file has changed.
-  def on_watched_files_change(changes : Array(LSProtocol::FileEvent)) : Nil
-    return unless changes.any? { |change| config_file?(change.uri) }
-
+  def on_config_change : Nil
     controller.documents.each do |document|
       # The same way Larimar handles a change, unless the document got closed meanwhile.
       document.mutex.write do
@@ -76,11 +43,6 @@ class AmebaLS::Provider < Larimar::Provider
       # Shouldn't keep the rest of the documents from being analysed.
       Log.error(exception: ex, &.emit("Failed to analyse a document", uri: document.uri.to_s))
     end
-  end
-
-  private def config_file?(uri : URI) : Bool
-    uri.scheme == "file" &&
-      Path[URI.decode(uri.path)].basename == Ameba::Config::Loader::FILENAME
   end
 
   def on_open(document : Larimar::TextDocument) : Nil
