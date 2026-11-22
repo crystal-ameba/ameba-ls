@@ -17,6 +17,25 @@ module AmebaLS::FixEdits
     corrector_edits(document, corrector)
   end
 
+  # Returns the edits fixing all of the fixable issues of *diagnostics* within
+  # *document*, along with the diagnostics of the issues they fix.
+  #
+  # All of the corrections apply to the same text, so the ones conflicting with
+  # the corrections applied before them are left out, the same way Ameba does,
+  # until the document gets analysed again.
+  private def fix_all_edits(document, diagnostics : Enumerable(IssueDiagnostic)) : {Array(LSProtocol::TextEdit), Array(IssueDiagnostic)}
+    corrector = Ameba::Source::Corrector.new(document.to_s)
+
+    fixed = diagnostics.select do |diagnostic|
+      issue = diagnostic.issue
+
+      fixable?(issue) &&
+        corrector.transaction { issue.correct(corrector) }
+    end
+
+    {corrector_edits(document, corrector), fixed}
+  end
+
   # Clients apply same-position edits in their array order, which here follows
   # the order `Ameba::Source::Corrector#process` applies them in.
   private def corrector_edits(document, corrector : Ameba::Source::Corrector) : Array(LSProtocol::TextEdit)

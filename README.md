@@ -3,7 +3,9 @@
 Language server for the [Ameba](https://github.com/crystal-ameba/ameba) linter
 for Crystal lang.
 
-Supports reporting issues while typing, and correcting issues via code actions.
+Supports reporting issues while typing, and correcting issues via code actions,
+either one at a time or all at once.
+
 Does not require `ameba` be installed.
 
 ![](/assets/output.gif)
