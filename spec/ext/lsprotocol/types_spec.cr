@@ -83,3 +83,49 @@ describe LSProtocol::Range do
     end
   end
 end
+
+describe LSProtocol::CodeActionKind do
+  it "#lsp_name returns the names used by LSP" do
+    LSProtocol::CodeActionKind::QuickFix.lsp_name.should eq("quickfix")
+    LSProtocol::CodeActionKind::Source.lsp_name.should eq("source")
+    LSProtocol::CodeActionKind::SourceFixAll.lsp_name.should eq("source.fixAll")
+    LSProtocol::CodeActionKind::Empty.lsp_name.should eq("")
+  end
+
+  it "#lsp_name round trips through parsing" do
+    LSProtocol::CodeActionKind.each do |kind|
+      LSProtocol::CodeActionKind.parse(kind.lsp_name).should eq(kind)
+    end
+  end
+end
+
+private def context_requesting(only)
+  LSProtocol::CodeActionContext.from_json({diagnostics: [] of String, only: only}.to_json)
+end
+
+describe LSProtocol::CodeActionContext do
+  describe "#requests?" do
+    it "returns true when no kinds were requested" do
+      context_requesting(nil).requests?(:quick_fix).should be_true
+    end
+
+    it "returns true for a requested kind" do
+      context_requesting(%w[refactor quickfix]).requests?(:quick_fix).should be_true
+    end
+
+    it "returns true for a kind within a requested one" do
+      context_requesting(%w[source]).requests?(:source_fix_all).should be_true
+    end
+
+    it "returns false for a kind that wasn't requested" do
+      context_requesting(%w[source.fixAll]).requests?(:quick_fix).should be_false
+      context_requesting(%w[source.fixAll]).requests?(:source).should be_false
+      context_requesting(%w[quick]).requests?(:quick_fix).should be_false
+    end
+
+    it "accepts kinds not known to `LSProtocol::CodeActionKind`" do
+      context_requesting(%w[source.fixAll.ameba]).requests?(:source_fix_all).should be_false
+      context_requesting(%w[source.fixAll.ameba quickfix]).requests?(:quick_fix).should be_true
+    end
+  end
+end

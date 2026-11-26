@@ -489,6 +489,24 @@ describe AmebaLS::Provider do
         .should eq(["Ignore Lint/DebugCalls"])
     end
 
+    it "offers nothing when only actions of other kinds were requested" do
+      harness = ProviderHarness.new
+      document = harness.document("foo\n")
+      harness.stub_diagnostics(document.uri, [stub_diagnostic])
+
+      %w[source source.organizeImports refactor].each do |kind|
+        context = LSProtocol::CodeActionContext.from_json({diagnostics: [] of String, only: [kind]}.to_json)
+        harness.provider
+          .provide_code_actions(document, lsp_range(0, 0, 0, 0), context, nil)
+          .should eq([] of LSProtocol::CodeAction)
+      end
+
+      context = LSProtocol::CodeActionContext.from_json({diagnostics: [] of String, only: %w[quickfix]}.to_json)
+      harness.provider
+        .provide_code_actions(document, lsp_range(0, 0, 0, 0), context, nil)
+        .should_not(be_nil).size.should eq(1)
+    end
+
     it "only offers to ignore issues that can't be corrected" do
       harness = ProviderHarness.new
       document = harness.document("foo\n")
